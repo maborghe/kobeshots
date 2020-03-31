@@ -25,8 +25,10 @@ season = substr(season, 1, 4)
 season = strtoi(season)
 kobe$season = season
 kobe = kobe[,-which(names(kobe) %in% c("minutes_remaining","seconds_remaining","team_name",
-                                      "team_id", "matchup", "game_event_id", "game_id",
+                                      "team_id", "matchup", "shot_zone_range", "game_event_id", "game_id",
                                       "game_date", "shot_id", "lat", "lon", "loc_x", "loc_y"))]
+
+kobe = kobe[,-which(names(kobe) %in% c("combined_shot_type", "opponent"))]
 
 # Logistic regression
 logreg = glm(shot_made_flag~., family=binomial, data=kobe)
@@ -34,9 +36,23 @@ probs = predict(logreg, type="response")
 preds = (probs>.45)
 table(shot_made_flag, preds)
 summary(logreg)
-summary(shot_distance)
-summary(loc_y)
-summary(loc_x)
 
+# Interacting terms (feet_x*feet_y)
+
+# Decision tree
+
+# Bagging
+
+# Random forest
+
+# Lda
+
+# Svm
+
+# Knn
+library(knitr)
+setwd("report")
+knit2pdf(input="report.Rnw", 
+         output=paste0("report",'.tex'))
 detach(kobe)
 rm(list=ls())

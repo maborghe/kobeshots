@@ -1,0 +1,22 @@
+\documentclass[english, 11pt]{article}
+\usepackage[utf8]{inputenc}
+
+\begin{document}
+
+\noindent Clever text.
+
+\section{Some math}
+In this section, we will write some Greek letters with impressive subscripts.
+For instance, check out $\alpha_{i,j,k,\ell}$ and $\beta_{p,q,r,s,t,u,v,w}$.
+Or, perhaps you prefer
+\[
+  \gamma_{12345} + \pi_0
+\]
+
+<<out.width=".9\\paperwidth">>=
+# Let's add 2 and 2
+2 + 2
+summary(kobe)
+@
+
+\end{document}
