@@ -13,10 +13,41 @@ Or, perhaps you prefer
   \gamma_{12345} + \pi_0
 \]
 
-<<out.width=".9\\paperwidth">>=
-# Let's add 2 and 2
-2 + 2
+<<fig.height=3, echo=FALSE>>=
+setwd("..")
+kobe <- read.csv(file = 'data.csv')
 summary(kobe)
+dim(kobe)
+kobe=na.omit(kobe)
+attach(kobe)
+time_remaining = minutes_remaining*60+seconds_remaining
+feet_x = abs(loc_x)/10
+feet_y = loc_y/10
+kobe$shot_distance = sqrt(feet_x^2 + feet_y^2)
+shot_angle = atan2(feet_y, feet_x)
+shot_side = ifelse(loc_x >= 0, "Right", "Left")
+kobe = cbind(kobe, time_remaining, shot_angle, feet_x, feet_y, shot_side)
+season = substr(season, 1, 4)
+season = strtoi(season)
+kobe$season = season
+kobe = kobe[,-which(names(kobe) %in% c("minutes_remaining","seconds_remaining","team_name",
+                                      "team_id", "matchup", "shot_zone_range", "game_event_id", "game_id",
+                                      "game_date", "shot_id", "lat", "lon", "loc_x", "loc_y"))]
+
+kobe = kobe[,-which(names(kobe) %in% c("combined_shot_type", "opponent"))]
+
 @
+
+
+<<test-plot, fig.height=3>>=
+# Logistic regression
+logreg = glm(shot_made_flag~., family=binomial, data=kobe)
+probs = predict(logreg, type="response")
+preds = (probs>.45)
+table(shot_made_flag, preds)
+summary(logreg)
+@
+
+
 
 \end{document}

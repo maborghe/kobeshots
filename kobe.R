@@ -35,9 +35,26 @@ logreg = glm(shot_made_flag~., family=binomial, data=kobe)
 probs = predict(logreg, type="response")
 preds = (probs>.45)
 table(shot_made_flag, preds)
+truep = sum(preds2==shot_made_flag)
+acc = truep / nrow(kobe)
 summary(logreg)
+logreg2 = glm(shot_made_flag~action_type+period+season+shot_distance+time_remaining+shot_angle, family=binomial, data=kobe)
+summary(logreg2)
+probs2 = predict(logreg2, type="response")
+preds2 = (probs2>.5)
+truep2 = sum(preds2==shot_made_flag)
+acc2 = truep2 / nrow(kobe)
+acc2
+logreg3 = glm(shot_made_flag~action_type+feet_x+feet_y+feet_x*feet_y+shot_side+period+time_remaining, family=binomial, data=kobe)
+summary(logreg3)
+probs3 = predict(logreg3, type="response")
+pred3 = (probs3>.5)
+truep3 = sum(pred3==shot_made_flag)
+acc3 = truep3 / nrow(kobe)
+acc3
 
 # Interacting terms (feet_x*feet_y)
+
 
 # Decision tree
 
