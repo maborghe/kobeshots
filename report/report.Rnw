@@ -1,25 +1,39 @@
-\documentclass[english, 11pt]{article}
+\documentclass[titlepage]{article}
 \usepackage[utf8]{inputenc}
 
 \begin{document}
 
-\noindent Clever text.
+\title{Kobe shot selection}
 
-\section{Some math}
-In this section, we will write some Greek letters with impressive subscripts.
-For instance, check out $\alpha_{i,j,k,\ell}$ and $\beta_{p,q,r,s,t,u,v,w}$.
-Or, perhaps you prefer
-\[
-  \gamma_{12345} + \pi_0
-\]
+\author{Matteo Borghesi}
 
-<<fig.height=3, echo=FALSE>>=
+\maketitle
+
+In this report we are going to analyse a dataset containing a selection of Kobe Bryant's shots throughout his career. The goal of the analysis is to build a binary classification model that is able to predict the outcome of the shot given some informations about the shots, referred to as \textit{features}, \textit{predictors} or \textit{attributes} from now on.
+
+The dataset is publicy available in the CSV format and contains ca. 30K shots, described by means of 25 attributes.\newline
+In the first section we are going to have a look at those attributes and perform a cleaning and transformation phase in order to make the dataset more suitable for further analysis. In the rest of the report we will use different techniques in the attempt of building a machine learning model that is able to correctly predict the \textit{shot\_made\_flag} predictor.\newline
+The analysis will be carried out using R 3.6 as well as different libraries, which will be pointed out each time.
+
+\section{Data exploration and feature engineering}
+The first phase in the analysis of a dataset must always be an exploration of the data provided. This may include a cleaning phase, in case some values or attributes are not needed, and a feature engineering phase, in which new predictors are created basing on the existing attributes and some kind of domain knowledge.\newline
+After loading the dataset in the R environment, we proceed with a coarse data exploration and cleaning. The dataset contains 30.697 records, however many of them are missing some values and therefore we decide to prune them: this leaves us with 25.697 records.
+
+<<>>=
 setwd("..")
-kobe <- read.csv(file = 'data.csv')
-summary(kobe)
-dim(kobe)
+kobe = read.csv(file='data.csv')
+nrow(kobe)
 kobe=na.omit(kobe)
+nrow(kobe)
+names(kobe)
+@
+
+
+
+
+<<echo=FALSE>>=
 attach(kobe)
+
 time_remaining = minutes_remaining*60+seconds_remaining
 feet_x = abs(loc_x)/10
 feet_y = loc_y/10
@@ -45,9 +59,12 @@ logreg = glm(shot_made_flag~., family=binomial, data=kobe)
 probs = predict(logreg, type="response")
 preds = (probs>.45)
 table(shot_made_flag, preds)
-summary(logreg)
+coef(logreg)
 @
 
 
+<<echo=FALSE>>=
+detach(kobe)
+@
 
 \end{document}

@@ -1,0 +1,40 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+In this report we are going to analyse a dataset containing a selection of Kobe Bryant's shots throughout his career. The goal of the analysis is to build a binary classification model that is able to predict the outcome of the shot given some informations about the shots, referred to as *features* or *predictors* from now on.
+
+The dataset is publicy available in the CSV format and contains ca. 30K shots, described by means of 25 attributes.\newline
+In the first section we are going to have a look at those attributes and perform a cleaning and transformation phase in order to make the dataset more suitable for further analysis. In the rest of the report we will use different techniques in the attempt of building a machine learning model that is able to correctly predict the \textit{shot\_made\_flag} attribute, which will be also called *target variable*.\newline
+The analysis will be carried out using R 3.6 as well as different libraries, which will be pointed out each time.
+
+### Data exploration and feature engineering
+The first phase in the analysis of a dataset must always be an exploration of the data provided. This may include a cleaning phase, in case some values or attributes are not needed, and a feature engineering phase, in which new predictors are created basing on the existing attributes and some kind of domain knowledge.\newline
+After loading the dataset in the R environment, we proceed with a coarse data exploration and cleaning. The dataset contains 30.697 records, however many of them are missing some values and therefore we decide to prune them: this leaves us with 25.697 records.
+
+```{r}
+kobe <- read.csv(file = '../data.csv')
+kobe=na.omit(kobe)
+nrow(kobe)
+```
+```{r}
+attach(kobe)
+summmary(kobe)
+```
+
+
+Subsequently we have a look at the attributes provided in the dataset. We notice that some features are redundant: for example, *team_name* and *team_id* take on a single value, while *lat* and *lon* provide the same information as *loc_x* and *loc_y* on a different scale. As we will see later, it is important to remove strong correlations among the attributes since they can negative impact on the analysis later (e.g. they can increase the variance of the coefficients and hence harm the reliability of the result).\
+It can also be useful to plot some of the attributes, in order to gain an intuitive feeling for the data we are dealing with. For example, we can plot loc_x and loc_y marking the successful shots in blue and the unsuccessful ones in red.
+
+
+```{r}
+dotsCol = rep("red", length(shot_made_flag))
+dotsCol[which(shot_made_flag==TRUE)] = "blue"
+plot(loc_y, loc_x, type="p", cex=0.1, pch=20, col=dotsCol)
+```
+
+Using some domain knowledge - e.g. that an NBA court is 94 by 50 feet - we can imply that loc_x and loc_y are expressed in tenth (1/10 of a foot). Since many of the analysis we are going to present base on some kind of linearity between the predictors and the target variable we prefer not to have a big differentiation between similar shots, such as those taken from the right angle and from the left angle, which have comparable rate of success.\
+Therefore we add two new features, called *feet_x* and *feet_y*, which express the absolute value of the original attributes, divided by 10 (i.e. converted into feet). We create also an additional value, *shot_side*, which signals whether the shot was taken from the right side (i.e. in the positive range of loc_x) or from the left side. In this way it will be easier to point out in the following sections if the side does play a role in the outcome of the shot or not.\
+Another example of feature engineering is the use of different coordinate systems to express the shot location. Along with the cartesian system used in feet_x and feet_y, here we want to also employ the polar coordinate system, which considers the distance of the shot and the angle between the shooter and the rim. In fact, even though there is a one-to-one mapping between the two systems, ...
