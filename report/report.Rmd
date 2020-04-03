@@ -36,5 +36,23 @@ plot(loc_y, loc_x, type="p", cex=0.1, pch=20, col=dotsCol)
 ```
 
 Using some domain knowledge - e.g. that an NBA court is 94 by 50 feet - we can imply that loc_x and loc_y are expressed in tenth (1/10 of a foot). Since many of the analysis we are going to present base on some kind of linearity between the predictors and the target variable we prefer not to have a big differentiation between similar shots, such as those taken from the right angle and from the left angle, which have comparable rate of success.\
-Therefore we add two new features, called *feet_x* and *feet_y*, which express the absolute value of the original attributes, divided by 10 (i.e. converted into feet). We create also an additional value, *shot_side*, which signals whether the shot was taken from the right side (i.e. in the positive range of loc_x) or from the left side. In this way it will be easier to point out in the following sections if the side does play a role in the outcome of the shot or not.\
-Another example of feature engineering is the use of different coordinate systems to express the shot location. Along with the cartesian system used in feet_x and feet_y, here we want to also employ the polar coordinate system, which considers the distance of the shot and the angle between the shooter and the rim. In fact, even though there is a one-to-one mapping between the two systems, ...
+Therefore we add two new features, called *feet_x* and *feet_y*, which express the absolute value of the original attributes, divided by 10 (i.e. converted into feet). We create also an additional value, *shot_side*, which signals whether the shot was taken from the right side (i.e. in the positive range of loc_x) or from the left side. In this way it will be easier to point out in the following sections if the side does play a role in the outcome of the shot or not.
+
+Another example of feature engineering is the use of different coordinate systems to express the shot location. Along with the cartesian system used in feet_x and feet_y, here we want to also employ the polar coordinates, which consider the shot distance and the angle between the shooter and the rim. In fact, even though there is a one-to-one mapping between the two systems, this is not achieved through a linear function: for this reason one of them could e.g. better fit the linear relationship in the log-odds of the prediction, which would reduce the bias of the logistic regression.\
+We conclude the first phase doing the transformation of one more attribute: specifically, we consider the attribute *season*, which is qualitative in the original dataset. Since we expect to see a gradual evolution in Bryant's shots over his career, we rather prefer to consider this variable as numerical, so that we the model can integrate more easily the temporal informations in its prediction.
+
+
+```{r}
+feet_x = abs(loc_x)/10
+feet_y = loc_y/10
+kobe$shot_distance = sqrt(feet_x^2 + feet_y^2) # distance in the polar coordinates
+shot_angle = atan2(feet_y, feet_x)             # angle in the polar coordinates
+shot_side = ifelse(loc_x >= 0, "Right", "Left")
+kobe = cbind(kobe, shot_angle, feet_x, feet_y, shot_side)
+season = substr(season, 1, 4)
+season = strtoi(season)
+kobe$season = season
+kobe = kobe[,-which(names(kobe) %in% c("minutes_remaining","seconds_remaining","team_name",
+                                      "team_id", "matchup", "shot_zone_range", "game_event_id", "game_id", "game_date", "shot_id", "lat", "lon", "loc_x", "loc_y"))]
+```
+
