@@ -60,7 +60,7 @@ We start by building a first, naive logistic regression model. First, we have wh
 We can check the correlation among continuous variables building a correlation matrix:
 
 ```{r}
-cor(kobe[,-c(1,7,8,9,14)])
+#cor(kobe[,-c(1,7,8,9,14)])
 ```
 
 Here we see that most of the variables are not strongly correlated. This does not hold for feet_x, feet_y, shot_distance and shot_angle. This is no wonder, since shot_distance and shot_angle have been created starting from the other two.\
