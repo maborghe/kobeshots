@@ -15,7 +15,7 @@ The first phase in the analysis of a dataset must always be an exploration of th
 After loading the dataset in the R environment, we proceed with a coarse data exploration and cleaning. The dataset contains 30.697 records, however many of them are missing some values and therefore we decide to prune them: this leaves us with 25.697 records.
 
 ```{r}
-kobe <- read.csv(file = '../data.csv')
+kobe <- read.csv(file = 'data.csv')
 kobe=na.omit(kobe)
 nrow(kobe)
 attach(kobe)
@@ -50,7 +50,7 @@ kobe = cbind(kobe, shot_angle, feet_x, feet_y, shot_side)
 season = substr(season, 1, 4)
 season = strtoi(season)
 kobe$season = season
-kobe = kobe[,-which(names(kobe) %in% c("minutes_remaining","seconds_remaining","team_name", "team_id", "matchup", "shot_zone_range", "game_event_id", "game_id", "game_date", "shot_id", "lat", "lon", "loc_x", "loc_y"))]
+kobe = kobe[,-which(names(kobe) %in% c("minutes_remaining","seconds_remaining","team_name", "team_id", "matchup", "shot_zone_range", "game_event_id", "game_id", "game_date", "shot_id", "lat", "lon", "loc_x", "loc_y", "action_type"))]
 ```
 
 ### 2. Logistic regression
@@ -67,7 +67,7 @@ Here we see that most of the variables are not strongly correlated. This does no
 Similarly, *combined_shot_sype* is a generalization of *shot_type*, while *shot_zone_area*, *shot_zone_basic* and *shot_zone_range* are a generalization of the shot coordinates, therefore we ignore them for now.
 
 ```{r}
-logreg = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe)
+logreg = glm(shot_made_flag~.-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe)
 summary(logreg)
 ```
 
@@ -78,19 +78,59 @@ In this first model, we can see that the dummy variables derived from opponent h
 The presence of insignificant predictors can negatively impact on the model, for example by increasing its variance. Therefore we now refine our first model by ignoring such predictors; in the next section we will evaluate both models and see whether this decision leads to a better performance.
 
 ```{r}
-logreg2 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y-playoffs-opponent-shot_side, family=binomial, data=kobe)
+logreg2 = glm(shot_made_flag~.-shot_zone_area-shot_zone_basic-feet_x-feet_y-playoffs-season-opponent-shot_side, family=binomial, data=kobe)
 #coef(summary(logreg2))[,4]["shot_distance"] # p-value of shot_distance
 ```
 
-
-```{r}
 #### 2.2 Evaluation
 
 ##### 2.2.1 Validation set
+The simplest way to evaluate a model is to use validation set. This approach consists in setting aside a part of the samples during the construction of the model and using them only in the evaluation. Common size proportions between training and validation set are 70%-30% and 80%-20%.\
+Clearly, in order to evaluate the models from the last section we have to repeat also the training phase, because we are not allowed to use the samples in the validation phase for building the model. However, we expect that the results obtained sofar also hold for the new training set, since its samples are chosen randomly.\
+Doing so, we can 
+
+```{r}
+set.seed(0)
+# Build training and validation set
+train_id = sample(nrow(kobe), 0.7*nrow(kobe))
+test_x = kobe[-train_id,]
+test_y = shot_made_flag[-train_id]
+# Rebuild logistic regression models
+logreg1 = glm(shot_made_flag~.-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe, subset=train_id)
+logreg2 = glm(shot_made_flag~.-shot_zone_area-shot_zone_basic-feet_x-feet_y-playoffs-season-opponent-shot_side, family=binomial, data=kobe, subset=train_id)
+# Evaluate models
+probs1 = predict(logreg1, test_x, type="response")
+preds1 = ifelse(probs1>.45, 1, 0)
+acc1 = sum(preds1==test_y)/length(test_y)
+probs2 = predict(logreg2, test_x, type="response")
+preds2 = ifelse(probs2>.45, 1, 0)
+acc2 = sum(preds2==test_y)/length(test_y)
+```
+
 
 ##### 2.2.2 Cross-validation
+```{r}
+# TODO: review..is it correct?
+library(boot)
+costFun <- function(r, pi) mean(abs(r-pi)> 0.5)
+logreg1 = glm(shot_made_flag~.-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe)
+cv1 = cv.glm(kobe, logreg1, cost=costFun, K=10)$delta[1]
+logreg2 = glm(shot_made_flag~.-shot_zone_area-shot_zone_basic-feet_x-feet_y-playoffs-season-opponent-shot_side, family=binomial, data=kobe)
+cv2 = cv.glm(kobe, logreg2, cost=costFun, K=10)$delta[1]
+```
 
 #### 2.3 Improving the model
+```{r}
+# 1. ignore attributes with high p-value
+```
+
+```{r}
+# 2. use action type
+```
+
+```{r}
+# 3. use feet, also with interaction term
+```
 
 #### 2.4 Model selection
 
@@ -99,3 +139,5 @@ logreg2 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic
 ##### 2.4.2 Stepwise subset selection
 
 ##### 2.4.3 Pca
+
+### 3. Decision tree
