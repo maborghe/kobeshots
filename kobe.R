@@ -24,6 +24,7 @@ kobe = cbind(kobe, time_remaining, shot_angle, feet_x, feet_y, shot_side)
 season = substr(season, 1, 4)
 season = strtoi(season)
 kobe$season = season
+rm(season)
 kobe = kobe[,-which(names(kobe) %in% c("minutes_remaining","seconds_remaining","team_name",
                                       "team_id", "matchup", "shot_zone_range", "game_event_id", "game_id",
                                       "game_date", "shot_id", "lat", "lon", "loc_x", "loc_y"))]

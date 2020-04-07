@@ -1,5 +1,5 @@
 ---
-title: "R Notebook"
+title: "KobeShots"
 output: html_notebook
 ---
 
@@ -10,7 +10,7 @@ The dataset is publicy available in the CSV format and contains ca. 30K shots, d
 In the first section we are going to have a look at those attributes and perform a cleaning and transformation phase in order to make the dataset more suitable for further analysis. In the rest of the report we will use different techniques in the attempt of building a machine learning model that is able to correctly predict the \textit{shot\_made\_flag} attribute, which will be also called *target variable*.\newline
 The analysis will be carried out using R 3.6 as well as different libraries, which will be pointed out each time.
 
-### Data exploration and feature engineering
+### 1. Data exploration and feature engineering
 The first phase in the analysis of a dataset must always be an exploration of the data provided. This may include a cleaning phase, in case some values or attributes are not needed, and a feature engineering phase, in which new predictors are created basing on the existing attributes and some kind of domain knowledge.\newline
 After loading the dataset in the R environment, we proceed with a coarse data exploration and cleaning. The dataset contains 30.697 records, however many of them are missing some values and therefore we decide to prune them: this leaves us with 25.697 records.
 
@@ -18,14 +18,12 @@ After loading the dataset in the R environment, we proceed with a coarse data ex
 kobe <- read.csv(file = '../data.csv')
 kobe=na.omit(kobe)
 nrow(kobe)
-```
-```{r}
 attach(kobe)
-summmary(kobe)
+#summmary(kobe) # have a look at the dataset
 ```
 
 
-Subsequently we have a look at the attributes provided in the dataset. We notice that some features are redundant: for example, *team_name* and *team_id* take on a single value, while *lat* and *lon* provide the same information as *loc_x* and *loc_y* on a different scale. As we will see later, it is important to remove strong correlations among the attributes since they can negative impact on the analysis later (e.g. they can increase the variance of the coefficients and hence harm the reliability of the result).\
+Subsequently we have a look at the attributes provided in the dataset. We notice that some features are redundant: for example, *team_name* and *team_id* take on a single value, while *lat* and *lon* provide the same information as *loc_x* and *loc_y* on a different scale.\
 It can also be useful to plot some of the attributes, in order to gain an intuitive feeling for the data we are dealing with. For example, we can plot loc_x and loc_y marking the successful shots in blue and the unsuccessful ones in red.
 
 
@@ -52,7 +50,52 @@ kobe = cbind(kobe, shot_angle, feet_x, feet_y, shot_side)
 season = substr(season, 1, 4)
 season = strtoi(season)
 kobe$season = season
-kobe = kobe[,-which(names(kobe) %in% c("minutes_remaining","seconds_remaining","team_name",
-                                      "team_id", "matchup", "shot_zone_range", "game_event_id", "game_id", "game_date", "shot_id", "lat", "lon", "loc_x", "loc_y"))]
+kobe = kobe[,-which(names(kobe) %in% c("minutes_remaining","seconds_remaining","team_name", "team_id", "matchup", "shot_zone_range", "game_event_id", "game_id", "game_date", "shot_id", "lat", "lon", "loc_x", "loc_y"))]
 ```
 
+### 2. Logistic regression
+
+#### 2.1 First model
+We start by building a first, naive logistic regression model. First, we have which predictors we use to train our model: at this points, it's important not to include correlated attributes in the predictors. It is important to remove strong correlations among the attributes since they can negative impact: in particular, they can increase the variance of the coefficients and hence harm the reliability of the result.\
+We can check the correlation among continuous variables building a correlation matrix:
+
+```{r}
+cor(kobe[,-c(1,7,8,9,14)])
+```
+
+Here we see that most of the variables are not strongly correlated. This does not hold for feet_x, feet_y, shot_distance and shot_angle. This is no wonder, since shot_distance and shot_angle have been created starting from the other two.\
+Similarly, *combined_shot_sype* is a generalization of *shot_type*, while *shot_zone_area*, *shot_zone_basic* and *shot_zone_range* are a generalization of the shot coordinates, therefore we ignore them for now.
+
+```{r}
+logreg = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe)
+summary(logreg)
+```
+
+We can see that in order to build the model all categorical predictors have to be transformed into dummy variables. In the case of binary predictors, such as shot_side, this simply means marking one value (in this case "Right") with 1 and the other one with 0. In the case of larger domains, there has to be one dummy variable for every possible value (minus one), which is 1 if the predictor takes on that value. Accordingly, the related coefficient indicates how the output changes when the attribute takes on that value.\
+We can have an insight on the statistical significance of our prediction by looking at the z-value and the corresponding p-value (displayed in the script as *Pr(>|z|)*). The z-value is a score that says how far each coefficient is from 0, which in turn would imply there is no relationship between the predictor and the response. The z-value is computed using the sample standard error: we can then look at the p-value to consider how likely is that the coefficient is 0, given its z-value.\
+In this first model, we can see that the dummy variables derived from opponent have quite high p-values, which suggests that the outcome of a shot does not depend on the opposing team. On the contrary, the coefficient of shot_angle is very unlikely to be 0, even though it has a small absolute value (0.12): that is because its standard error is so little (0.03) that the z-score is cranked up, so as we can rely on the statistical significance of the coefficient. If we consider how shot_angle was constructed, we see that its value is 0 for shots taken from the base line and $\pi$/2 for shots taken face the rim. Therefore, the value of 0.12 means that shots taken in front of the rim have higher odds of being successful, since they have higher values of shot_angle.\
+
+The presence of insignificant predictors can negatively impact on the model, for example by increasing its variance. Therefore we now refine our first model by ignoring such predictors; in the next section we will evaluate both models and see whether this decision leads to a better performance.
+
+```{r}
+logreg2 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y-playoffs-opponent-shot_side, family=binomial, data=kobe)
+#coef(summary(logreg2))[,4]["shot_distance"] # p-value of shot_distance
+```
+
+
+```{r}
+#### 2.2 Evaluation
+
+##### 2.2.1 Validation set
+
+##### 2.2.2 Cross-validation
+
+#### 2.3 Improving the model
+
+#### 2.4 Model selection
+
+##### 2.4.1 Best subset selection
+
+##### 2.4.2 Stepwise subset selection
+
+##### 2.4.3 Pca
