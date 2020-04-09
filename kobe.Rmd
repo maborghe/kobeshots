@@ -50,7 +50,16 @@ kobe = cbind(kobe, shot_angle, feet_x, feet_y, shot_side)
 season = substr(season, 1, 4)
 season = strtoi(season)
 kobe$season = season
-kobe = kobe[,-which(names(kobe) %in% c("minutes_remaining","seconds_remaining","team_name", "team_id", "matchup", "shot_zone_range", "game_event_id", "game_id", "game_date", "shot_id", "lat", "lon", "loc_x", "loc_y", "action_type"))]
+kobe = kobe[,-which(names(kobe) %in% c("minutes_remaining","seconds_remaining","team_name", "team_id", "matchup", "shot_zone_range", "game_event_id", "game_id", "game_date", "shot_id", "lat", "lon", "loc_x", "loc_y"))]
+```
+
+
+```{r}
+rareVars = names(which(summary(action_type) < 50))
+rareIndex = action_type %in% rareVars
+kobe$action_type = factor(kobe$action_type, levels=c(levels(action_type), "Other"))
+kobe$action_type[rareIndex] = "Other"
+action_type = kobe$action_type
 ```
 
 ### 2. Logistic regression
@@ -67,20 +76,13 @@ Here we see that most of the variables are not strongly correlated. This does no
 Similarly, *combined_shot_sype* is a generalization of *shot_type*, while *shot_zone_area*, *shot_zone_basic* and *shot_zone_range* are a generalization of the shot coordinates, therefore we ignore them for now.
 
 ```{r}
-logreg = glm(shot_made_flag~.-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe)
+logreg = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe)
 summary(logreg)
 ```
 
 We can see that in order to build the model all categorical predictors have to be transformed into dummy variables. In the case of binary predictors, such as shot_side, this simply means marking one value (in this case "Right") with 1 and the other one with 0. In the case of larger domains, there has to be one dummy variable for every possible value (minus one), which is 1 if the predictor takes on that value. Accordingly, the related coefficient indicates how the output changes when the attribute takes on that value.\
 We can have an insight on the statistical significance of our prediction by looking at the z-value and the corresponding p-value (displayed in the script as *Pr(>|z|)*). The z-value is a score that says how far each coefficient is from 0, which in turn would imply there is no relationship between the predictor and the response. The z-value is computed using the sample standard error: we can then look at the p-value to consider how likely is that the coefficient is 0, given its z-value.\
 In this first model, we can see that the dummy variables derived from opponent have quite high p-values, which suggests that the outcome of a shot does not depend on the opposing team. On the contrary, the coefficient of shot_angle is very unlikely to be 0, even though it has a small absolute value (0.12): that is because its standard error is so little (0.03) that the z-score is cranked up, so as we can rely on the statistical significance of the coefficient. If we consider how shot_angle was constructed, we see that its value is 0 for shots taken from the base line and $\pi$/2 for shots taken face the rim. Therefore, the value of 0.12 means that shots taken in front of the rim have higher odds of being successful, since they have higher values of shot_angle.\
-
-The presence of insignificant predictors can negatively impact on the model, for example by increasing its variance. Therefore we now refine our first model by ignoring such predictors; in the next section we will evaluate both models and see whether this decision leads to a better performance.
-
-```{r}
-logreg2 = glm(shot_made_flag~.-shot_zone_area-shot_zone_basic-feet_x-feet_y-playoffs-season-opponent-shot_side, family=binomial, data=kobe)
-#coef(summary(logreg2))[,4]["shot_distance"] # p-value of shot_distance
-```
 
 #### 2.2 Evaluation
 
@@ -96,15 +98,11 @@ train_id = sample(nrow(kobe), 0.7*nrow(kobe))
 test_x = kobe[-train_id,]
 test_y = shot_made_flag[-train_id]
 # Rebuild logistic regression models
-logreg1 = glm(shot_made_flag~.-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe, subset=train_id)
-logreg2 = glm(shot_made_flag~.-shot_zone_area-shot_zone_basic-feet_x-feet_y-playoffs-season-opponent-shot_side, family=binomial, data=kobe, subset=train_id)
+logreg1 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe, subset=train_id)
 # Evaluate models
 probs1 = predict(logreg1, test_x, type="response")
 preds1 = ifelse(probs1>.45, 1, 0)
 acc1 = sum(preds1==test_y)/length(test_y)
-probs2 = predict(logreg2, test_x, type="response")
-preds2 = ifelse(probs2>.45, 1, 0)
-acc2 = sum(preds2==test_y)/length(test_y)
 ```
 
 
@@ -120,24 +118,70 @@ cv2 = cv.glm(kobe, logreg2, cost=costFun, K=10)$delta[1]
 ```
 
 #### 2.3 Improving the model
+The presence of insignificant predictors can negatively impact on the model, for example by increasing its variance. Therefore we now refine our first model by ignoring such predictors; in the next section we will evaluate both models and see whether this decision leads to a better performance.
+
 ```{r}
 # 1. ignore attributes with high p-value
+logreg2 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y-playoffs-season-shot_distance-opponent-shot_side, family=binomial, data=kobe, subset=train_id)
+probs2 = predict(logreg2, test_x, type="response")
+preds2 = ifelse(probs2>.45, 1, 0)
+acc2 = sum(preds2==test_y)/length(test_y)
 ```
 
 ```{r}
-# 2. use action type
+# 2. cartesian coordinates
+logreg3 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-shot_angle-shot_distance-playoffs-season-shot_side, family=binomial, data=kobe, subset=train_id)
+probs3 = predict(logreg3, test_x, type="response")
+preds3 = ifelse(probs3>.45, 1, 0)
+acc3 = sum(preds3==test_y)/length(test_y)
 ```
 
 ```{r}
-# 3. use feet, also with interaction term
+# model variance
+logreg4 = glm(shot_made_flag~.-action_type-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe, subset=train_id)
+coef(summary(logreg1))[,4][27:31]
+coef(summary(logreg4))[,4][7:11]
+probs4 = predict(logreg4, test_x, type="response")
+preds4 = ifelse(probs4>.45, 1, 0)
+acc4 = sum(preds4==test_y)/length(test_y)
 ```
 
 #### 2.4 Model selection
 
-##### 2.4.1 Best subset selection
 
-##### 2.4.2 Stepwise subset selection
+##### 2.4.1 Forward stepwise selection
+<!--- Tell you use R^2 --->
+```{r}
+library(leaps)
+kobe.fw = kobe
+kobe.fw = kobe.fw[,-c(1,11)]
+logreg.fwd = regsubsets(shot_made_flag~., data=kobe.fw[train_id,], nvmax=25, method="forward")
+coef(logreg.fwd, 5)
+```
+
+##### 2.4.2 Backward stepwise selection
+```{r}
+```
 
 ##### 2.4.3 Pca
+```{r}
+pr.out = prcomp(kobe, scale=TRUE)
+```
 
 ### 3. Decision tree
+
+### 3.1 Bagging
+
+### 3.1 Random forest
+
+### 4. Lda
+
+### 5. Svm
+
+### 6. Knn
+
+### (7. Evaluation metrics)
+<!--
+hyperparameters (logistic regression threshold)
+other metrics (precision, recall, roc curve)
+-->
