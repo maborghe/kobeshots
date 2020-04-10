@@ -10,7 +10,8 @@ The dataset is publicy available in the CSV format and contains ca. 30K shots, d
 In the first section we are going to have a look at those attributes and perform a cleaning and transformation phase in order to make the dataset more suitable for further analysis. In the rest of the report we will use different techniques in the attempt of building a machine learning model that is able to correctly predict the \textit{shot\_made\_flag} attribute, which will be also called *target variable*.\newline
 The analysis will be carried out using R 3.6 as well as different libraries, which will be pointed out each time.
 
-### 1. Data exploration and feature engineering
+### 1. Data exploration
+
 The first phase in the analysis of a dataset must always be an exploration of the data provided. This may include a cleaning phase, in case some values or attributes are not needed, and a feature engineering phase, in which new predictors are created basing on the existing attributes and some kind of domain knowledge.\newline
 After loading the dataset in the R environment, we proceed with a coarse data exploration and cleaning. The dataset contains 30.697 records, however many of them are missing some values and therefore we decide to prune them: this leaves us with 25.697 records.
 
@@ -33,6 +34,19 @@ dotsCol[which(shot_made_flag==TRUE)] = "blue"
 plot(loc_y, loc_x, type="p", cex=0.1, pch=20, col=dotsCol)
 ```
 
+#### 1.2 FAMD
+```{r}
+library("FactoMineR")
+library("factoextra")
+famd = FAMD(kobe, graph = FALSE)
+get_eigenvalue(famd)
+fviz_screeplot(famd)
+var = get_famd_var(famd)
+var$contrib
+fviz_famd_var(famd, repel = TRUE)
+```
+
+### 2. Feature engineering
 Using some domain knowledge - e.g. that an NBA court is 94 by 50 feet - we can imply that loc_x and loc_y are expressed in tenth (1/10 of a foot). Since many of the analysis we are going to present base on some kind of linearity between the predictors and the target variable we prefer not to have a big differentiation between similar shots, such as those taken from the right angle and from the left angle, which have comparable rate of success.\
 Therefore we add two new features, called *feet_x* and *feet_y*, which express the absolute value of the original attributes, divided by 10 (i.e. converted into feet). We create also an additional value, *shot_side*, which signals whether the shot was taken from the right side (i.e. in the positive range of loc_x) or from the left side. In this way it will be easier to point out in the following sections if the side does play a role in the outcome of the shot or not.
 
@@ -153,10 +167,21 @@ acc4 = sum(preds4==test_y)/length(test_y)
 <!--- Tell you use R^2 --->
 ```{r}
 library(leaps)
+names(kobe)
+logreg.fwd = regsubsets(shot_made_flag~action_type+combined_shot_type+period+playoffs+season+shot_distance+shot_type+shot_zone_area+shot_zone_basic+opponent+shot_angle+feet_x+feet_y+shot_side, data=kobe[train_id,], nvmax=25, method="exhaustive")
 kobe.fw = kobe
 kobe.fw = kobe.fw[,-c(1,11)]
 logreg.fwd = regsubsets(shot_made_flag~., data=kobe.fw[train_id,], nvmax=25, method="forward")
 coef(logreg.fwd, 5)
+```
+
+```{r}
+test.mat = model.matrix(shot_made_flag~., data=kobe.fw[-train_id,])
+val.errors = rep(NA, 25)
+for (i in 1:25) {
+  coefi = coef(logreg.fwd, id=i)
+  preds = test.mat
+}
 ```
 
 ##### 2.4.2 Backward stepwise selection
