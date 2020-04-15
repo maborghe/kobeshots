@@ -51,6 +51,7 @@ feet_y = loc_y/10
 kobe$shot_distance = sqrt(feet_x^2 + feet_y^2) # distance in the polar coordinates
 shot_angle = atan2(feet_y, feet_x)             # angle in the polar coordinates
 shot_side = ifelse(loc_x >= 0, "Right", "Left")
+shot_side <- as.factor(shot_side)
 kobe = cbind(kobe, shot_angle, feet_x, feet_y, shot_side)
 season = substr(season, 1, 4)
 season = strtoi(season)
@@ -152,18 +153,80 @@ acc4 = sum(preds4==test_y)/length(test_y)
 ```
 
 ### 3. Decision tree
-<!-- Both entropy and decision tree -->
+A simple, yet effective method to perform statistical learning analysis is to grow a decision tree. This technique consists in building a set of rules that predict the output in a step-by-step, greedy way. Such rules are arranged in a tree structure, whose internal nodes are boolean conditions on the attibutes that lead to a unique prediction for each input sample.
+
+A central point in the construction of a decision tree is the choice of the attributes that are taken into account at each step. There are different criteria to solve this problems, the most popular ones for classification purposes are the *entropy* and the *Gini index*.\
+In this context we are going to focus on the entropy (or *deviance*), which is expressed by the formula:
+
+<center>$E=-\sum_{k=1}^{K} p_k*log(p_k)$</center>
+
+where $p_k$ represents the relative frequency of a class in a given set of samples. During the construction of the model, we want to choose those attributes that allow to split the original dataset in such a way that E is minimized.\
+The tree can be then grown until there are no more attributes or we can set a stop rule, regarding mostly the number of steps or the minimal improvement obtained through a new step.
+
+The standard R implementation of the algorithm forces us to discard in advance those factors (i.e. categorical variables) that have more than 32 levels in the domain, which in our case are opponent and action_type.\
+As we run the algorithm we notice that only one attributes is considered, namely combined_shot_type. Nevertheless, the validation accuracy is roughly 61%
+
+```{r}
+library(tree)
+shot_made_bool = ifelse(shot_made_flag==1, "Yes", "No")
+kobe_frame = data.frame(kobe, shot_made_bool)
+kobe_frame = kobe_frame[,-7]
+tree = tree(shot_made_bool~.-opponent-action_type, kobe_frame,  split="deviance", subset=train_id)
+preds = predict(tree, kobe_frame[-train_id,], type="class")
+plot(tree)
+text(tree, pretty=0)
+```
+
 
 
 ### 3.1 Bagging
+While decision trees are easily interpretable and produce a decent accuracy, they turn out to be highly instable, since little modifications in the dataset produce big modifications in the model. This results in high variance and hence in overfitting, which can harm the quality of the result when dealing with new samples.\
+One possible workaround is to build several trees, starting from different datasets, in order to reduce the impact of a single modification on the final result. The technique called *Bootstrap aggregation*, also called *bagging*, follows this approach, whereby the different datasets are in fact the result of multiple samplings with replacement from the original dataset.\
+In this way we build a certain number of trees that can be possibly very different from each other, due to the high variance of the decision tree algorithm. The prediction is then obtained through a majority vote among all the trees, so that a slight modification in one or a few trees does not necessarily influence the outcome.\
+The numbers of trees is a hyperparameter of the technique, that can be tuned using the typical validation techniques (validation set or cross-validation); standard values are in the order of several hundreds. Clearly, using so many models in parallel comes at a cost both when it comes to train the model and to produce a prediction.\
+
+
+
+<!-- Try hyperparameter nr. trees-->
+```{r}
+library(randomForest)
+set.seed(0)
+acc= rep(NA, 10)
+for(i in 1:1) {
+  bag = randomForest(shot_made_bool~.-action_type-shot_made_flag,data=kobe_frame, subset=train_id, mtry=13, importance=TRUE)
+  preds = predict(bag, newdata=kobe[-train_id,])
+  preds = ifelse(preds=="No", 0, 1)
+  acc = sum(preds==test_y)/length(test_y) 
+}
+
+
+```
+
 
 ### 3.1 Random forest
-
-### 4. Lda
+```{r}
+set.seed(0)
+forest = randomForest(shot_made_bool~.-action_type-shot_made_flag,data=kobe_frame, subset=train_id, importance=TRUE)
+preds = predict(forest, newdata=kobe[-train_id,])
+table(preds, test_y)
+```
 
 ### 5. Svm
 
 ### 6. Knn
+<!-- We use only continuous (season, feet_x, feet_y, distance, angle) and ordinal () variables -->
+<!-- Use different distances -->
+```{r}
+library(class)
+set.seed(1)
+shot_type_num = ifelse(shot_type=="3PT Field Goal", 1, 0)
+train.X = cbind(season, feet_x, feet_y, shot_distance, shot_angle, shot_type_num)[train_id,]
+train.Y = shot_made_flag[train_id]
+test.X = cbind(season, feet_x, feet_y, shot_distance, shot_angle, shot_type_num)[-train_id,]
+preds = knn(train.X, test.X, train.Y, k=5)
+table(preds, test_y)
+acc = sum(preds==test_y)/length(test_y)
+```
 
 ### 7. Dimensionality reduction
 
@@ -191,4 +254,8 @@ pr.out = prcomp(kobe, scale=TRUE)
 <!--
 hyperparameters (logistic regression threshold)
 other metrics (precision, recall, roc curve)
+-->
+
+<!--
+Compare all models
 -->
