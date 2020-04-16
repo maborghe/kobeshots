@@ -27,6 +27,8 @@ nrow(kobe)
 Subsequently we have a look at the attributes provided in the dataset. We notice that some features are redundant: for example, *team_name* and *team_id* take on a single value, while *lat* and *lon* provide the same information as *loc_x* and *loc_y* on a different scale.\
 It can also be useful to plot some of the attributes, in order to gain an intuitive feeling for the data we are dealing with. For example, we can plot loc_x and loc_y marking the successful shots in blue and the unsuccessful ones in red.
 
+<!-- TODO: class distribution!! -->
+
 
 ```{r}
 attach(kobe)
@@ -68,11 +70,6 @@ action_type = kobe$action_type
 kobe = kobe[,-which(names(kobe) %in% c("minutes_remaining","seconds_remaining","team_name", "team_id", "matchup", "shot_zone_range", "game_event_id", "game_id", "game_date", "shot_id", "lat", "lon", "loc_x", "loc_y"))]
 ```
 
-
-```{r}
-
-```
-
 ### 2. Logistic regression
 The first analysis we are going to perform is called logistic regression. This algorithm assigns a value between 0 and 1 to each sample and can be used to build a binary classifier, whereby the output value is interpreted as the probability of the sample belonging to one of the two classes.\
 Formally the output value is obtained through the formula
@@ -105,9 +102,10 @@ In this first model, we can see that the dummy variables derived from opponent h
 #### 2.2 Evaluation
 
 ##### 2.2.1 Validation set
-The simplest way to evaluate a model is to use validation set. This approach consists in setting aside a part of the samples during the construction of the model and using them only in the evaluation. Common size proportions between training and validation set are 70%-30% and 80%-20%.\
+The simplest way to evaluate a model is to use a validation set. This approach consists in setting aside a part of the samples during the construction of the model and using them only in the evaluation. Common size proportions between training and validation set are 70%-30% and 80%-20%.\
 Clearly, in order to evaluate the models from the last section we have to repeat also the training phase, because we are not allowed to use the samples in the validation phase for building the model. However, we expect that the results obtained sofar also hold for the new training set, since its samples are chosen randomly.\
-Doing so, we can 
+As we have said before, the output of a logistic regression model is a value between 0 and 1, which can be interpreted as the probability of the sample belonging to one class. However, when it comes to mark a class label we have to choose the threshold above which samples are assigned to class \"1\". This can vary according to our needs: for example, if we want to avoid false negatives in particular we might set a threshold lower than 0.5.\
+In our case, the two classes are quite balanced and missclassification has the same cost in both cases, so we can expect a 50% threshold to work well. Indeed, we see in the plot that the maximum accuracy is reached at 0.5 and it amounts to 68.2%.
 
 ```{r}
 set.seed(0)
@@ -115,24 +113,28 @@ set.seed(0)
 train_id = sample(nrow(kobe), 0.7*nrow(kobe))
 test_x = kobe[-train_id,]
 test_y = shot_made_flag[-train_id]
-# Rebuild logistic regression models
+# Rebuild and evaluate model
 logreg1 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe, subset=train_id)
-# Evaluate models
 probs1 = predict(logreg1, test_x, type="response")
-preds1 = ifelse(probs1>.45, 1, 0)
-acc1 = sum(preds1==test_y)/length(test_y)
+acc= rep(NA, 9)
+thresholds = c(0.2, 0.3, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7, 0.8)
+for (i in 1:9) {
+  preds1 = ifelse(probs1>thresholds[i], 1, 0)
+  acc[i] = sum(preds1==test_y)/length(test_y)  
+}
+plot(thresholds, acc, xlab="threshold", ylab="accuracy", pch=20, col="blue")
 ```
 
 
 ##### 2.2.2 Cross-validation
+An alternative approach for evaluating a model is to use cross-validation. This technique includes dividing the data set in N buckets and building N different models, each using all buckets but one as training set (specifically, the i-th model uses buckets but the i-th one). The remaining bucket is then used as validation set, the final accuracy is then computed as the average accuracy of all the models.\
+This technique is particularly suited for small datasets, where using a significant percentage of the samples solely for validation can impact on the stability of the models: in fact, many coefficient measures are directly related to the number of samples used, hence having less samples increases the standard error and the p-values, makes the coefficients intervals wider, and so on.\
+The disadvantage of this technique lies in higher computational costs, since it requires to build several models (typical values for N are 5 and 10). In our case we have sufficient samples to use a separated validation set and perform cross validation only in this section. In particular we perform 10-fold CV on the logistic regression model seen in section 2.1: this results in an accuracy of 68.1%, which is basically the same as we obtained with the validation set (the threshold here is implicitly set to 0.5).
 ```{r}
-# TODO: review..is it correct?
 library(boot)
 costFun <- function(r, pi) mean(abs(r-pi)> 0.5)
-logreg1 = glm(shot_made_flag~.-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe)
-cv1 = cv.glm(kobe, logreg1, cost=costFun, K=10)$delta[1]
-logreg2 = glm(shot_made_flag~.-shot_zone_area-shot_zone_basic-feet_x-feet_y-playoffs-season-opponent-shot_side, family=binomial, data=kobe)
-cv2 = cv.glm(kobe, logreg2, cost=costFun, K=10)$delta[1]
+cv_err = cv.glm(kobe, logreg, cost=costFun, K=10)$delta[1] # CV error
+1-cv_err # accuracy
 ```
 
 #### 2.3 Improving the model
