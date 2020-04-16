@@ -21,8 +21,6 @@ After loading the dataset in the R environment, we proceed with a coarse data ex
 kobe <- read.csv(file = 'data.csv')
 kobe=na.omit(kobe)
 nrow(kobe)
-attach(kobe)
-#summmary(kobe) # have a look at the dataset
 ```
 
 
@@ -31,6 +29,7 @@ It can also be useful to plot some of the attributes, in order to gain an intuit
 
 
 ```{r}
+attach(kobe)
 dotsCol = rep("red", length(shot_made_flag))
 dotsCol[which(shot_made_flag==TRUE)] = "blue"
 plot(loc_y, loc_x, type="p", cex=0.1, pch=20, col=dotsCol)
@@ -38,14 +37,16 @@ plot(loc_y, loc_x, type="p", cex=0.1, pch=20, col=dotsCol)
 
 
 ### 1.2 Feature engineering
-Using some domain knowledge - e.g. that an NBA court is 94 by 50 feet - we can imply that loc_x and loc_y are expressed in tenth (1/10 of a foot). Since many of the analysis we are going to present base on some kind of linearity between the predictors and the target variable we prefer not to have a big differentiation between similar shots, such as those taken from the right angle and from the left angle, which have comparable rate of success.\
+Using some domain knowledge - e.g. that an NBA court is 94 by 50 feet - we can imply that loc_x and loc_y are expressed in tenth (1/10 of a foot). Since many of the analyses we are going to present base on some kind of linearity between the predictors and the target variable we prefer not to have a big differentiation between similar shots, such as those taken from the right angle and from the left angle, which have comparable rate of success.\
 Therefore we add two new features, called *feet_x* and *feet_y*, which express the absolute value of the original attributes, divided by 10 (i.e. converted into feet). We create also an additional value, *shot_side*, which signals whether the shot was taken from the right side (i.e. in the positive range of loc_x) or from the left side. In this way it will be easier to point out in the following sections if the side does play a role in the outcome of the shot or not.
 
 Another example of feature engineering is the use of different coordinate systems to express the shot location. Along with the cartesian system used in feet_x and feet_y, here we want to also employ the polar coordinates, which consider the shot distance and the angle between the shooter and the rim. In fact, even though there is a one-to-one mapping between the two systems, this is not achieved through a linear function: for this reason one of them could e.g. better fit the linear relationship in the log-odds of the prediction, which would reduce the bias of the logistic regression.\
-We conclude the first phase doing the transformation of one more attribute: specifically, we consider the attribute *season*, which is qualitative in the original dataset. Since we expect to see a gradual evolution in Bryant's shots over his career, we rather prefer to consider this variable as numerical, so that we the model can integrate more easily the temporal informations in its prediction.
+Furthermore, we consider the attribute *season*, which is qualitative in the original dataset. Since we expect to see a gradual evolution in Bryant's shots over his career, we rather prefer to consider this variable as numerical, so that we the model can integrate more easily the temporal informations in its prediction.\
+We conclude the first phase looking at the attribute *shot_type*, which is a categorical attribute with as many as 58 levels. However, many of these levels appear only a few times in the dataset, which makes the analysis more difficult and less generalizable. Therefore we group all the levels with less than 50 instances in a new level called \"Other\".
 
 
 ```{r}
+# create coordinates systems
 feet_x = abs(loc_x)/10
 feet_y = loc_y/10
 kobe$shot_distance = sqrt(feet_x^2 + feet_y^2) # distance in the polar coordinates
@@ -53,22 +54,33 @@ shot_angle = atan2(feet_y, feet_x)             # angle in the polar coordinates
 shot_side = ifelse(loc_x >= 0, "Right", "Left")
 shot_side <- as.factor(shot_side)
 kobe = cbind(kobe, shot_angle, feet_x, feet_y, shot_side)
+# make season continuous
 season = substr(season, 1, 4)
 season = strtoi(season)
 kobe$season = season
-kobe = kobe[,-which(names(kobe) %in% c("minutes_remaining","seconds_remaining","team_name", "team_id", "matchup", "shot_zone_range", "game_event_id", "game_id", "game_date", "shot_id", "lat", "lon", "loc_x", "loc_y"))]
-```
-
-
-```{r}
+# create new factor in action_type
 rareVars = names(which(summary(action_type) < 50))
 rareIndex = action_type %in% rareVars
 kobe$action_type = factor(kobe$action_type, levels=c(levels(action_type), "Other"))
 kobe$action_type[rareIndex] = "Other"
 action_type = kobe$action_type
+# prune unuseful attributes
+kobe = kobe[,-which(names(kobe) %in% c("minutes_remaining","seconds_remaining","team_name", "team_id", "matchup", "shot_zone_range", "game_event_id", "game_id", "game_date", "shot_id", "lat", "lon", "loc_x", "loc_y"))]
+```
+
+
+```{r}
+
 ```
 
 ### 2. Logistic regression
+The first analysis we are going to perform is called logistic regression. This algorithm assigns a value between 0 and 1 to each sample and can be used to build a binary classifier, whereby the output value is interpreted as the probability of the sample belonging to one of the two classes.\
+Formally the output value is obtained through the formula
+
+<center>$y=p(x)=\frac{1}{1+exp(xw)}$</center>
+
+where *x* is the input vector and *w* is a vector of parameters. The goal of the training phase is hence to finetune w so as to maximize the probability that the samples are assigned to the right class, which is done usually through gradient descent.\
+Even though the above formula is clearly non-linear, it can be seen though some easy transformations that logistic regression delivers a linear decision boundary, and that the log-odds (i.e. the logarithm of the odds $\frac{p(x)}{1-p(x)}$) are linear in x.
 
 #### 2.1 First model
 We start by building a first, naive logistic regression model. First, we have which predictors we use to train our model: at this points, it's important not to include correlated attributes in the predictors. It is important to remove strong correlations among the attributes since they can negative impact: in particular, they can increase the variance of the coefficients and hence harm the reliability of the result.\
@@ -212,6 +224,16 @@ table(preds, test_y)
 ```
 
 ### 5. Svm
+```{r}
+library(e1071)
+dat = data.frame(x=kobe[,-7], y=as.factor(shot_made_flag))
+svmfit = svm(shot_made_flag~., data=dat, kernel="linear", cost=10, scale=FALSE)
+testdat = data.frame(x=kobe[-train_id,], y=as.factor(test_y))
+preds = predict(svmfit, testdat)
+table(predict=preds, truth=testdat$y)
+```
+
+
 
 ### 6. Knn
 <!-- We use only continuous (season, feet_x, feet_y, distance, angle) and ordinal () variables -->
