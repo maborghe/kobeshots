@@ -91,7 +91,7 @@ Here we see that most of the variables are not strongly correlated. This does no
 Similarly, *combined_shot_sype* is a generalization of *shot_type*, while *shot_zone_area*, *shot_zone_basic* and *shot_zone_range* are a generalization of the shot coordinates, therefore we ignore them for now.
 
 ```{r}
-logreg = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe)
+logreg = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y, family=binomial, data=kobe)
 summary(logreg)
 ```
 
@@ -138,32 +138,44 @@ cv_err = cv.glm(kobe, logreg, cost=costFun, K=10)$delta[1] # CV error
 ```
 
 #### 2.3 Improving the model
-The presence of insignificant predictors can negatively impact on the model, for example by increasing its variance. Therefore we now refine our first model by ignoring such predictors; in the next section we will evaluate both models and see whether this decision leads to a better performance.
+The presence of insignificant predictors can negatively impact on a model, for example by increasing its variance. Therefore we now refine the first model built in section 2.1 by excluding those attributes that show a high p-value, i.e. a high probability that their true coefficient is 0 and hence they are not related to the target variable. These attributes are *playoffs*, *opponent*, *shot_side* and *shot_distance*. We evaluate the new model with with the help of the validation set and obtain an accuracy of 68.1%, which turns out to be the same as before.
 
 ```{r}
-# 1. ignore attributes with high p-value
-logreg2 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y-playoffs-season-shot_distance-opponent-shot_side, family=binomial, data=kobe, subset=train_id)
+logreg2 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y-playoffs-shot_distance-opponent-shot_side, family=binomial, data=kobe, subset=train_id)
 probs2 = predict(logreg2, test_x, type="response")
-preds2 = ifelse(probs2>.45, 1, 0)
-acc2 = sum(preds2==test_y)/length(test_y)
+preds2 = ifelse(probs2>.5, 1, 0)
+sum(preds2==test_y)/length(test_y) # accuracy
 ```
 
+Another possibility to transform the initial model is to use the cartesian coordinates feet_x and feet_y instead of the polar ones, i.e. shot_angle and shot_distance. Also here, the validation accuracy remains stable: this could be partially already expected by the fact the shot_distance had already been proved to be statistically irrelevant in the prediction.\
+We can also try adding an interacion term feet_x*feet_y, basing on the consideration that shots with a high value in both coordinates are frequently more difficult than 3 pointers taken from the angle or facing the rim, which display a high value only in one of the coordinates. However, also this does not improve the validation accuracy, and the interaction term indeed turns out to have a p-value of 0.06, which makes it unnecessary.
+
 ```{r}
-# 2. cartesian coordinates
-logreg3 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-shot_angle-shot_distance-playoffs-season-shot_side, family=binomial, data=kobe, subset=train_id)
+logreg3 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-shot_angle-shot_distance, family=binomial, data=kobe, subset=train_id)
+#logreg3 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-shot_angle-shot_distance+feet_x*feet_y, family=binomial, data=kobe, subset=train_id)
 probs3 = predict(logreg3, test_x, type="response")
-preds3 = ifelse(probs3>.45, 1, 0)
-acc3 = sum(preds3==test_y)/length(test_y)
+preds3 = ifelse(probs3>.5, 1, 0)
+sum(preds3==test_y)/length(test_y)
 ```
+
+We conclude this section about logistic regression showing some limitations of the z-score and the related p-value. As we have seen sofar, these values express the statistical significance of a predictor; in particular the p-value can be interpreted as the likelihood of the true coefficient being zero, given the estimated coefficient and the sample standard error.\
+However, as we already said this value can be significantly influenced by other factors, e.g. the presence of correlated attributes, which we are not going to analyse further in this report. Instead we will give here a more general example of how the p-value of one attribute can be considerably impacted by the presence of certain predictors.\
+To do that we build a new model which does not contain the action_type attribute, but instead takes in the *combined_shot_type*, which is just a generalization of the former one. We then look at the p-values of other attributes in the model. As a consequence of the lack of information, the validation accuracy drops suddenly to 60.8%, which points out the importance of the action_type attribute with respect to most of the other ones, which had little or no impact at test time, as we have seen in the last sections.\
+At the same time, however, we also see that the degree of rejection of the null hypothesis for the other predictors changes significantly: for example the p-value for *season* is reduced by a factor $10^4$, while for *shot_distance* it increases by $10^3$.
 
 ```{r}
 # model variance
 logreg4 = glm(shot_made_flag~.-action_type-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe, subset=train_id)
-coef(summary(logreg1))[,4][27:31]
-coef(summary(logreg4))[,4][7:11]
-probs4 = predict(logreg4, test_x, type="response")
-preds4 = ifelse(probs4>.45, 1, 0)
-acc4 = sum(preds4==test_y)/length(test_y)
+pvalues1 = coef(summary(logreg1))[,4][27:31]
+pvalues2 = coef(summary(logreg4))[,4][7:11]
+tab = matrix(c(pvalues1, pvalues2), ncol=2, byrow=TRUE)
+colnames(tab) = c("logreg1", "logreg4")
+rownames(tab) = c("period", "playoffs", "season", "shot_distance", "shot_type")
+tab
+#probs4 = predict(logreg4, test_x, type="response")
+#preds4 = ifelse(probs4>.45, 1, 0)
+#sum(preds4==test_y)/length(test_y)
+
 ```
 
 ### 3. Decision tree
@@ -194,52 +206,80 @@ text(tree, pretty=0)
 
 
 ### 3.1 Bagging
-While decision trees are easily interpretable and produce a decent accuracy, they turn out to be highly instable, since little modifications in the dataset produce big modifications in the model. This results in high variance and hence in overfitting, which can harm the quality of the result when dealing with new samples.\
-One possible workaround is to build several trees, starting from different datasets, in order to reduce the impact of a single modification on the final result. The technique called *Bootstrap aggregation*, also called *bagging*, follows this approach, whereby the different datasets are in fact the result of multiple samplings with replacement from the original dataset.\
+While decision trees are easily interpretable and produce a decent accuracy, they turn out to be highly instable, since little modifications in the dataset can produce big changes in the model. This results in high variance and hence in overfitting, which can harm the quality of the result when dealing with new samples.\
+One possible workaround is to build several trees, starting from different datasets, in order to reduce the impact of a single modification on the final result. The technique called *Bootstrap aggregation*, also called *bagging*, follows this approach, whereby the different datasets are in fact the result of multiple samplings with replacement from the same dataset.\
 In this way we build a certain number of trees that can be possibly very different from each other, due to the high variance of the decision tree algorithm. The prediction is then obtained through a majority vote among all the trees, so that a slight modification in one or a few trees does not necessarily influence the outcome.\
-The numbers of trees is a hyperparameter of the technique, that can be tuned using the typical validation techniques (validation set or cross-validation); standard values are in the order of several hundreds. Clearly, using so many models in parallel comes at a cost both when it comes to train the model and to produce a prediction.\
+The numbers of trees is a hyperparameter of the technique, that can be tuned using the typical validation techniques (validation set or cross-validation); typical values are in the order of several hundreds. Clearly, using so many models in parallel comes at a cost both when it comes to train the model and to produce a prediction.\
+We train different models with a number of trees between 200 and 800, however the validation accuracy does not exceed 58%, which is worse than the single decision tree. This may be due to implementation details of the two algorithms, but for us it means primarily that the model using the decision tree does not suffer from excessive variance and overfitting.
 
-
-
-<!-- Try hyperparameter nr. trees-->
 ```{r}
 library(randomForest)
-set.seed(0)
-acc= rep(NA, 10)
-for(i in 1:1) {
-  bag = randomForest(shot_made_bool~.-action_type-shot_made_flag,data=kobe_frame, subset=train_id, mtry=13, importance=TRUE)
+acc = rep(NA, 7)
+ntrees = seq(200, 800, 100)
+for(i in 1:7) {
+  bag = randomForest(shot_made_bool~.-action_type-shot_made_flag,data=kobe_frame, subset=train_id, ntree=ntrees[i], mtry=13, importance=TRUE)
   preds = predict(bag, newdata=kobe[-train_id,])
   preds = ifelse(preds=="No", 0, 1)
-  acc = sum(preds==test_y)/length(test_y) 
+  acc[i] = sum(preds==test_y)/length(test_y) 
 }
-
-
+plot(ntrees, acc, xlab="n° trees", ylab="accuracy", ylim=c(.5,.6), pch=20, col="blue")
 ```
 
 
 ### 3.1 Random forest
+Random forest is a generalization of the bagging technique, which aims to further reduce the variance of models based on decision trees. In this case, besides sampling many datasets and building a different tree on each dataset, the algorithm considers only a limited number of attributes to, which are chosen randomly at each split step. This helps to reduce the correlation between trees, which tend to consider some major attributes at the beginning and hence deliver similar results.\
+The number of variables taken into account is a hyperparameter, which is normally $\sqrt{p}$ in case of $p$ predictors. In the following plot are displayed the validation accuracies for models with different values of $p$. As you may have guessed, a model which considers all 13 predictors coincides with the bagging model illustrated in the last section.\
+As we can see, the highest accuracy is reached with as little as two predictors and is comparable with the one of the simple decision tree model. This may also explain why the bagging model resulted in a poorer performance.
 ```{r}
 set.seed(0)
-forest = randomForest(shot_made_bool~.-action_type-shot_made_flag,data=kobe_frame, subset=train_id, importance=TRUE)
-preds = predict(forest, newdata=kobe[-train_id,])
-table(preds, test_y)
+acc = rep(NA, 9)
+attr = 2:10
+for(i in 1:9) {
+  forest = randomForest(shot_made_bool~.-action_type-shot_made_flag,data=kobe_frame, subset=train_id, mtry=attr[i], importance=TRUE)
+  preds = predict(forest, newdata=kobe[-train_id,])
+  preds = ifelse(preds=="No", 0, 1)
+  acc[i] = sum(preds==test_y)/length(test_y) 
+}
+plot(attr, acc, xlab="mtry", ylab="accuracy", ylim=c(.5,.65), pch=20, col="blue")
 ```
 
-### 5. Svm
+
+### 4. Svm
+In this section we will consider another popular classification technique, that is Support Vector Machines. The goal of this technique is to find a vector *w*, called *support vectors*, that satisfies the equation 
+
+<center>$y(w*x-b)>=1$</center>
+
+for every training sample *x*. In order to do so an iterative algorithm is applied, and *w* is computed as a weighted sum of all the training samples. In case the hyperplane in which the training samples are placed is not linearly separable (i.e. there is no vector *w* which satisfy the equation) it is possible to introduce a so-called slack variable in order to relax the constraint.\
+In order to account for categorical attributes it is possible to use the same approach seen in the logistic regression, i.e. a set of dummy variables that are able to encode all the values of the attribute domain.
+
 ```{r}
 library(e1071)
-dat = data.frame(x=kobe[,-7], y=as.factor(shot_made_flag))
-svmfit = svm(shot_made_flag~., data=dat, kernel="linear", cost=10, scale=FALSE)
-testdat = data.frame(x=kobe[-train_id,], y=as.factor(test_y))
-preds = predict(svmfit, testdat)
-table(predict=preds, truth=testdat$y)
+dat = kobe_frame[train_id,]
+svmlin = svm(shot_made_bool~., data=dat, kernel="linear", cost=10, scale=TRUE)
+preds = predict(svmlin, kobe_frame[-train_id,])
+preds = ifelse(preds=="No", 0, 1)
+sum(preds==test_y)/length(test_y)
 ```
 
-
+```{r}
+library(e1071)
+dat = kobe_frame[train_id,]
+svmrad = svm(shot_made_bool~., data=dat, kernel="radial", gamma=1, cost=10, scale=FALSE)
+preds = predict(svmrad, kobe_frame[-train_id,])
+preds = ifelse(preds=="No", 0, 1)
+sum(preds==test_y)/length(test_y)
+```
 
 ### 6. Knn
 <!-- We use only continuous (season, feet_x, feet_y, distance, angle) and ordinal () variables -->
 <!-- Use different distances -->
+The last classification technique we present here is K-nearest Neighbors, a.k.a. KNN. The idea behind this algorithm is to assign samples which are "near" to each other to the same class. Much like decision trees, despite its intuitive nature this method performs surprisingly well in many real cases and is appreciated for its high degree of interpretability, which makes its results easier to understand than e.g. logistic regression or support vector machines.\
+Given that, the main disadvantage of Knn is that it is computationally slow at testing time: in fact, the dataset has to be traversed each time in order to find the "nearest" samples and to produce a prediction. This also that the storage requirements of this technique are quite disfavorable, as well, since it requires to store the whole dataset and to keep it available at test time. This characteristics are radically different from the ones shown by Svm, which only requires to store the support vector and is able to produce a prediction just by multiplying that vector with the input.\
+The central point when dealing with a Knn classifier is how to define the distance between to samples. The typical approach is here to use some kind of Minkowski distance (most commonly the Euclidean or the Manhattan distance) in the predictor hyperspace. However there are at least two aspects that must be considered. First of all, the attributes normally have big differences in their domain range. Some attributes like loc_x span an interval of several hundreds, while others are contained within just two or three numbers. In order to prevent a subset of predictors from determining the outcome alone, the attributes have to be normalized according to their mean and their standard distance.\
+Secondly, as the number of dimensions in a hyperspace increases the difference between the neighrest and the furthest sample reduces. In a high-dimensional space distance metrics lose any significance and the performance of the model is seriously harmed.\
+The most important issue in our case is that it is particularly difficult to define the distance in case of categorical attributes. If the variable is ordinal, it is still possible to assign an incremental value to each domain level. Dummy variables here are pointless, since they increase drastically the number of dimensions without providing a real advantage.\
+Keeping this considerations in mind we build a Knn classifier that only considers 6 of the original 13 attributes, i.e. season, feet_x, feet_y, shot_distance, shot_angle and shot_type. Knn models must be configured with a hyperparameter *k* that indicates the number of samples to be consider. In fact, the prediction is produced as a majority vote among the *k* nearest neighbors - hence the name - that can be possibly weighted to account for the distance to each neighbor.
+
 ```{r}
 library(class)
 set.seed(1)
