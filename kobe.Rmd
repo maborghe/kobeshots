@@ -301,7 +301,19 @@ This is most commonly done by means of an iterative algorithm that chooses at ea
 Unfortunately, since the basis vectors are linear dependencies of the original attributes it is important that the latters take on numerical value: therefore, just like in the case of Knn is not possible to use dummy variables to encode the categorical attributes. Our analysis will thus consist in performing a Pca analysis on the continuous attributs we have used also for Knn (i.e. season, feet_x, feet_y, shot_distance, shot_angle and shot_type) and training a logistic regression model which the first two principal components (i.e. basis vectors) along with the categorical attributes.
 
 ```{r}
-pr.out = prcomp(kobe, scale=TRUE)
+library("factoextra")
+kobe.cont = kobe[,which(names(kobe) %in% c("season", "feet_x", "feet_y", "shot_distance", "shot_angle", "shot_type_num"))] # TODO shot_type_num!
+pca = prcomp(kobe.cont[train_id,], scale=TRUE)
+fviz_eig(pca)
+res.var <- get_pca_var(pca)
+res.var$coord
+pca = prcomp(kobe.cont, scale=TRUE)
+pca.cont = predict(pca, newdata=kobe.cont)[,1:3]
+pca.kobe = data.frame(pca.cont, action_type, period, playoffs, opponent)
+logreg = glm(shot_made_flag~pca.cont[,1]+pca.cont[,2]+pca.cont[,3]+action_type+period+playoffs+opponent, family=binomial, subset=train_id)
+probs = predict(logreg, pca.kobe[-train_id,], type="response")
+preds = ifelse(probs>0.5, 1, 0)
+sum(preds==test_y)/length(test_y)
 ```
 
 #### 7.2 Factor Analysis of Mixed Data
@@ -309,7 +321,6 @@ In this section we have a brief look at another technique, called Factor Analysi
 
 ```{r}
 library("FactoMineR")
-library("factoextra")
 famd = FAMD(kobe[,-which(names(kobe)=="shot_made_flag")], graph = FALSE)
 #get_eigenvalue(famd)
 var = get_famd_var(famd)
