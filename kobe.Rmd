@@ -307,10 +307,12 @@ pca = prcomp(kobe.cont[train_id,], scale=TRUE)
 fviz_eig(pca)
 res.var <- get_pca_var(pca)
 res.var$coord
-pca = prcomp(kobe.cont, scale=TRUE)
-pca.cont = predict(pca, newdata=kobe.cont)[,1:3]
-pca.kobe = data.frame(pca.cont, action_type, period, playoffs, opponent)
-logreg = glm(shot_made_flag~pca.cont[,1]+pca.cont[,2]+pca.cont[,3]+action_type+period+playoffs+opponent, family=binomial, subset=train_id)
+pca.cont = as.data.frame(predict(pca, newdata=kobe.cont)[,1:3])
+pca.kobe = cbind(pca.cont, action_type, period, playoffs, opponent)
+PC1 = pca.kobe$PC1
+PC2 = pca.kobe$PC2
+PC3 = pca.kobe$PC3
+logreg = glm(shot_made_flag~PC1+PC2+PC3+action_type+period+playoffs+opponent, family=binomial, subset=train_id)
 probs = predict(logreg, pca.kobe[-train_id,], type="response")
 preds = ifelse(probs>0.5, 1, 0)
 sum(preds==test_y)/length(test_y)
