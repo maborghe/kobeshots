@@ -305,7 +305,7 @@ pr.out = prcomp(kobe, scale=TRUE)
 ```
 
 #### 7.2 Factor Analysis of Mixed Data
-In this section we have a brief look at another dimensionality reduction technique, called Factor Analysis of Mixed Data (FAMD). Its goal is to 
+In this section we have a brief look at another technique, called Factor Analysis of Mixed Data (FAMD). Its goal is to offer a single dimensionality framework for both continuous and categorical attributes: this is achieved performing a Pca anaysis on the first ones (just like we have seen in the last section) and a Multiple Correspondence Analysis on the latter ones. In this case it is not possible to perform a change of basis and to gain a single attribute that summarizes the variance, as it happened in Pca. Therefore our analysis does not aim to build another model - possibly with less attributes and a better performance as in the case of Pca - but only to have an idea of which attributes explain the variance in the data, without limiting our scope to continuous attributes.
 
 ```{r}
 library("FactoMineR")
