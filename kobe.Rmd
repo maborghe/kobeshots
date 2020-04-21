@@ -125,6 +125,8 @@ for (i in 1:9) {
 plot(thresholds, acc, xlab="threshold", ylab="accuracy", pch=20, col="blue")
 ```
 
+TODO ADD ROC CURVE AND OTHER METRICS
+
 
 ##### 2.2.2 Cross-validation
 An alternative approach for evaluating a model is to use cross-validation. This technique includes dividing the data set in N buckets and building N different models, each using all buckets but one as training set (specifically, the i-th model uses buckets but the i-th one). The remaining bucket is then used as validation set, the final accuracy is then computed as the average accuracy of all the models.\
@@ -247,10 +249,13 @@ plot(attr, acc, xlab="mtry", ylab="accuracy", ylim=c(.5,.65), pch=20, col="blue"
 ### 4. Support Vector Machines
 In this section we will consider another popular classification technique, that is Support Vector Machines (Svm). The goal of this technique is to find a vector *w*, called *support vectors*, that satisfies the equation 
 
-<center>$y(w*x-b)>=1$</center>
+<center>$y(w*x-b)\geq1$</center>
 
-for every training sample *x*. In order to do so an iterative algorithm is applied, and *w* is computed as a weighted sum of all the training samples. In case the hyperplane in which the training samples are placed is not linearly separable (i.e. there is no vector *w* which satisfy the equation) it is possible to introduce a so-called slack variable in order to relax the constraint.\
-In order to account for categorical attributes it is possible to use the same approach seen in the logistic regression, i.e. a set of dummy variables that are able to encode all the values of the attribute domain.
+for every training sample *x* and at the same time maximizes the margin between the two classes. *w* turns out to be a weighted sum of the training samples, whereby the weight is non-zero for all the samples placed on the class margin.\
+In order to account for categorical attributes it is possible to use the same approach seen in the logistic regression, i.e. a set of dummy variables that are able to encode all the values of the attribute domain.\
+In case the hyperplane in which the training samples are placed is not linearly separable (i.e. there is no vector *w* which satisfy the equation) it is possible to introduce a so-called slack variable in order to relax the constraint. In this case we speak of a *soft-margin* classifier.\
+Another alternative for solving non linear problems with Svm is to use the so-called *kernel trick*. The idea behind that is to project the samples into a higher-dimensional space where the problem is linearly separable. In the equation above we replace thus $x$ with $\phi(x)$. The function $\phi$ is not given explicitly, instead we usually consider an alternative function *k* that fulfills the equation $k(x,y) =<\phi(x),\phi(y)>$.\
+We are going to consider here four soft-margin Svm models which use all predictors in the dataset as explained in sec. 1. Each model employs a different kernel function, the four possibilities are a linear, a polynomial, a radial basis and a sigmoid kernel. In the folloowing plot we show how these models perform: we can see that, apart from the polynomial kernel, they reach similar accuracies as the logistic regression models considered in sec. 2.
 
 <!-- Try als polynomial and sigmoid-->
 ```{r}
@@ -267,7 +272,7 @@ for (i in 1:4) {
 barplot(acc, xlab="kernel", ylab="accuracy", names.arg=ker, col="darkred", ylim=c(0,1), space=1) 
 ```
 
-### 6. K-nearest Neighbors
+### 5. K-nearest Neighbors
 The last classification technique we present here is K-nearest Neighbors, a.k.a. Knn. The idea behind this algorithm is to assign samples which are "near" to each other to the same class. Much like decision trees, despite its intuitive nature this method performs surprisingly well in many real cases and is appreciated for its high degree of interpretability, which makes its results easier to understand than e.g. logistic regression or support vector machines.\
 Given that, the main disadvantage of Knn is that it is computationally slow at testing time: in fact, the dataset has to be traversed each time in order to find the "nearest" samples and to produce a prediction. This also that the storage requirements of this technique are quite disfavorable, as well, since it requires to store the whole dataset and to keep it available at test time. This characteristics are radically different from the ones shown by Svm, which only requires to store the support vector and is able to produce a prediction just by multiplying that vector with the input.\
 The central point when dealing with a Knn classifier is how to define the distance between to samples. The typical approach is here to use some kind of Minkowski distance (most commonly the Euclidean or the Manhattan distance) in the predictor hyperspace. However there are at least two aspects that must be considered. First of all, the attributes normally have big differences in their domain range. Some attributes like loc_x span an interval of several hundreds, while others are contained within just two or three numbers. In order to prevent a subset of predictors from determining the outcome alone, the attributes have to be normalized according to their mean and their standard distance.\
@@ -293,9 +298,9 @@ for (i in seq(1, length(neighbors))) {
 plot(neighbors, acc, xlab="k", ylab="accuracy", ylim=c(.5,.65), pch=20, col="blue")
 ```
 
-### 7. Dimensionality reduction
+### 6. Dimensionality reduction
 
-##### 7.1 Principal Component Analysis
+##### 6.1 Principal Component Analysis
 The most popular technique for dimensionality reduction is probably Principal Components Analysis (Pca). Intuitively, this method wants to perform a change of basis in the predictor hyperplane, choosing each basis vector according to its capability to explain the variance in the data.\
 This is most commonly done by means of an iterative algorithm that chooses at each step the vector that leads to the most variance when the original data are projected onto it. For this reason the vectors are taken into the basis in descending order of importance, since the last ones only cover the variance that has been left unexplained by the first ones. The values in the change of basis matrix give then a hint about which of the original attributes plays a significant role in characterizing the data.\
 Unfortunately, since the basis vectors are linear dependencies of the original attributes it is important that the latters take on numerical value: therefore, just like in the case of Knn is not possible to use dummy variables to encode the categorical attributes. Our analysis will thus consist in performing a Pca analysis on the continuous attributs we have used also for Knn (i.e. season, feet_x, feet_y, shot_distance, shot_angle and shot_type) and training a logistic regression model which the first two principal components (i.e. basis vectors) along with the categorical attributes.
@@ -318,7 +323,7 @@ preds = ifelse(probs>0.5, 1, 0)
 sum(preds==test_y)/length(test_y)
 ```
 
-#### 7.2 Factor Analysis of Mixed Data
+#### 6.2 Factor Analysis of Mixed Data
 In this section we have a brief look at another technique, called Factor Analysis of Mixed Data (FAMD). Its goal is to offer a single dimensionality framework for both continuous and categorical attributes: this is achieved performing a Pca anaysis on the first ones (just like we have seen in the last section) and a Multiple Correspondence Analysis on the latter ones. In this case it is not possible to perform a change of basis and to gain a single attribute that summarizes the variance, as it happened in Pca. Therefore our analysis does not aim to build another model - possibly with less attributes and a better performance as in the case of Pca - but only to have an idea of which attributes explain the variance in the data, without limiting our scope to continuous attributes.
 
 ```{r}
@@ -331,13 +336,6 @@ fviz_famd_var(famd, repel = TRUE)
 fviz_screeplot(famd)
 ```
 
-
-### (7. Evaluation metrics)
-<!--
-hyperparameters (logistic regression threshold)
-other metrics (precision, recall, roc curve)
--->
-
-<!--
-Compare all models
--->
+### 7. Conclusion
+In this last section we compare the models introduced sofar. Among all of them, the logistic regression and the support vector machine algorithms have provided the best results in term of validation accuracy, scoring about 68% correct predictions. The logistic regression setting has also proved to be robust with respect to changes in the predictors, such as the coordinate system. This comes at the cost of a considerable model complexity, which makes them interpretable only by means of the mathematical formulas they are based on.\
+On the other hand, simple models such as decision tree and Knn have shown results that go way beyond a simple null model, which makes only majority class considerations. This occurs despite inherent limitations in the models, e.g. the use of greedy choices in the construction of a decision tree or the difficulty to include categorical attributes in a Knn model.
