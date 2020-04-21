@@ -17,7 +17,7 @@ The analysis will be carried out using R 3.6 as well as different libraries, whi
 The first phase in the analysis of a dataset must always be an exploration of the data provided. This may include a cleaning phase, in case some values or attributes are not needed, and a feature engineering phase, in which new predictors are created basing on the existing attributes and some kind of domain knowledge.\newline
 After loading the dataset in the R environment, we proceed with a coarse data exploration and cleaning. The dataset contains 30.697 records, however many of them are missing some values and therefore we decide to prune them: this leaves us with 25.697 records.
 
-```{r}
+```{r, message=FALSE}
 kobe <- read.csv(file = 'data.csv')
 kobe=na.omit(kobe)
 nrow(kobe)
@@ -27,7 +27,7 @@ nrow(kobe)
 Subsequently we have a look at the attributes provided in the dataset. We notice that some features are redundant: for example, *team_name* and *team_id* take on a single value, while *lat* and *lon* provide the same information as *loc_x* and *loc_y* on a different scale.\
 It can also be useful to plot some of the attributes, in order to gain an intuitive feeling for the data we are dealing with. For example, we can plot loc_x and loc_y marking the successful shots in blue and the unsuccessful ones in red.
 
-```{r}
+```{r, echo=FALSE}
 attach(kobe)
 dotsCol = rep("red", length(shot_made_flag))
 dotsCol[which(shot_made_flag==TRUE)] = "blue"
@@ -44,7 +44,7 @@ Furthermore, we consider the attribute *season*, which is qualitative in the ori
 We conclude the first phase looking at the attribute *shot_type*, which is a categorical attribute with as many as 58 levels. However, many of these levels appear only a few times in the dataset, which makes the analysis more difficult and less generalizable. Therefore we group all the levels with less than 50 instances in a new level called \"Other\".
 
 
-```{r}
+```{r, echo=FALSE}
 # create coordinates systems
 feet_x = abs(loc_x)/10
 feet_y = loc_y/10
@@ -80,14 +80,14 @@ Even though the above formula is clearly non-linear, it can be seen though some 
 We start by building a first, naive logistic regression model. First, we have which predictors we use to train our model: at this points, it's important not to include correlated attributes in the predictors. It is important to remove strong correlations among the attributes since they can negative impact: in particular, they can increase the variance of the coefficients and hence harm the reliability of the result.\
 We can check the correlation among continuous variables building a correlation matrix:
 
-```{r}
-#cor(kobe[,-c(1,7,8,9,14)])
+```{r, message=FALSE}
+cor(kobe[,-which(names(kobe) %in% c("action_type", "combined_shot_type", "shot_type", "shot_zone_area", "shot_zone_basic", "opponent", "shot_side"))])
 ```
 
 Here we see that most of the variables are not strongly correlated. This does not hold for feet_x, feet_y, shot_distance and shot_angle. This is no wonder, since shot_distance and shot_angle have been created starting from the other two.\
 Similarly, *combined_shot_sype* is a generalization of *shot_type*, while *shot_zone_area*, *shot_zone_basic* and *shot_zone_range* are a generalization of the shot coordinates, therefore we ignore them for now.
 
-```{r}
+```{r, message=FALSE}
 logreg = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y, family=binomial, data=kobe)
 summary(logreg)
 ```
@@ -101,10 +101,14 @@ In this first model, we can see that the dummy variables derived from opponent h
 ##### 2.2.1 Validation set
 The simplest way to evaluate a model is to use a validation set. This approach consists in setting aside a part of the samples during the construction of the model and using them only in the evaluation. Common size proportions between training and validation set are 70%-30% and 80%-20%.\
 Clearly, in order to evaluate the models from the last section we have to repeat also the training phase, because we are not allowed to use the samples in the validation phase for building the model. However, we expect that the results obtained sofar also hold for the new training set, since its samples are chosen randomly.\
-As we have said before, the output of a logistic regression model is a value between 0 and 1, which can be interpreted as the probability of the sample belonging to one class. However, when it comes to mark a class label we have to choose the threshold above which samples are assigned to class \"1\". This can vary according to our needs: for example, if we want to avoid false negatives in particular we might set a threshold lower than 0.5.\
-In our case, the two classes are quite balanced and missclassification has the same cost in both cases, so we can expect a 50% threshold to work well. Indeed, we see in the plot that the maximum accuracy is reached at 0.5 and it amounts to 68.2%.
+As we have said before, the output of a logistic regression model is a value between 0 and 1, which can be interpreted as the probability of the sample belonging to one class. However, when it comes to mark a class label we have to choose the threshold above which samples are assigned to class \"1\". This can vary according to our needs: for example, if we want to avoid false negatives in particular we might set a threshold lower than 0.5. In our case, the two classes are quite balanced and missclassification has the same cost in both cases, so we can expect a 50% threshold to work well. Indeed, we see in the plot that the maximum accuracy is reached at 0.5 and it amounts to 68.2%.\
+In an evaluation context it can be useful to consider not only accuracy but also other metrics. In fact, sometimes we are not only interested in achieving a good overall accuracy, but it can be important to be able to right wrong predictions even if they have a little contribution to the accuracy. This is again the case if e.g. we are particularly sensitive to false negatives, i.e. we want to be able to recognize positives in a context where most of the samples are negatives. In order to evaluate the model also from this point of view we can use two metrics, that are defined as follows:
+<center>$precision=\frac{tp}{tp+fp}$</center>\
+<center>$recall=\frac{tp}{tp+fn}$</center>\
+where *tp* are the true positives, *fp* the false positives and *fn* the false negatives.\
+The plot also dislays those metrics for the models introduced before. As the threshold goes up, the number of false positives is reduced and hence the precision is increased. At the same time the number of false negatives also goes up, since a higher probability is required in order to marked the shot as successful, so that the recall sinks. It is therefore necessary to find a balance between the three metrics, which in this case is reached at 0.3.
 
-```{r}
+```{r, echo=FALSE}
 set.seed(0)
 # Build training and validation set
 train_id = sample(nrow(kobe), 0.7*nrow(kobe))
@@ -128,16 +132,14 @@ plot(thresholds, type="n", xlab="threshold", ylab="", ylim=c(0,1))
 lines(acc, type="o", pch=20, col="blue")
 lines(prec, type="o", pch=20, col="red")
 lines(recall, type="o", pch=20, col="green")
-legend(1, 0.37, legend=c("accuracy", "precision", "recall"), col=c("red", "blue", "green"), lty=1:2, cex=0.8, box.lty=0)
+legend(1, 0.37, legend=c("accuracy", "precision", "recall"), col=c("blue", "red", "green"), lty=1, cex=0.8, box.lty=0)
 ```
-
-In an evaluation context it can be useful to consider not only 
 
 ##### 2.2.2 Cross-validation
 An alternative approach for evaluating a model is to use cross-validation. This technique includes dividing the data set in N buckets and building N different models, each using all buckets but one as training set (specifically, the i-th model uses buckets but the i-th one). The remaining bucket is then used as validation set, the final accuracy is then computed as the average accuracy of all the models.\
 This technique is particularly suited for small datasets, where using a significant percentage of the samples solely for validation can impact on the stability of the models: in fact, many coefficient measures are directly related to the number of samples used, hence having less samples increases the standard error and the p-values, makes the coefficients intervals wider, and so on.\
 The disadvantage of this technique lies in higher computational costs, since it requires to build several models (typical values for N are 5 and 10). In our case we have sufficient samples to use a separated validation set and perform cross validation only in this section. In particular we perform 10-fold CV on the logistic regression model seen in section 2.1: this results in an accuracy of 68.1%, which is basically the same as we obtained with the validation set (the threshold here is implicitly set to 0.5).
-```{r}
+```{r, message=FALSE}
 library(boot)
 costFun <- function(r, pi) mean(abs(r-pi)> 0.5)
 cv_err = cv.glm(kobe, logreg, cost=costFun, K=10)$delta[1] # CV error
@@ -147,7 +149,7 @@ cv_err = cv.glm(kobe, logreg, cost=costFun, K=10)$delta[1] # CV error
 #### 2.3 Improving the model
 The presence of insignificant predictors can negatively impact on a model, for example by increasing its variance. Therefore we now refine the first model built in section 2.1 by excluding those attributes that show a high p-value, i.e. a high probability that their true coefficient is 0 and hence they are not related to the target variable. These attributes are *playoffs*, *opponent*, *shot_side* and *shot_distance*. We evaluate the new model with with the help of the validation set and obtain an accuracy of 68.1%, which turns out to be the same as before.
 
-```{r}
+```{r, message=FALSE}
 logreg2 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-feet_x-feet_y-playoffs-shot_distance-opponent-shot_side, family=binomial, data=kobe, subset=train_id)
 probs2 = predict(logreg2, test_x, type="response")
 preds2 = ifelse(probs2>.5, 1, 0)
@@ -157,7 +159,7 @@ sum(preds2==test_y)/length(test_y) # accuracy
 Another possibility to transform the initial model is to use the cartesian coordinates feet_x and feet_y instead of the polar ones, i.e. shot_angle and shot_distance. Also here, the validation accuracy remains stable: this could be partially already expected by the fact the shot_distance had already been proved to be statistically irrelevant in the prediction.\
 We can also try adding an interacion term feet_x*feet_y, basing on the consideration that shots with a high value in both coordinates are frequently more difficult than 3 pointers taken from the angle or facing the rim, which display a high value only in one of the coordinates. However, also this does not improve the validation accuracy, and the interaction term indeed turns out to have a p-value of 0.06, which makes it unnecessary.
 
-```{r}
+```{r, message=FALSE}
 logreg3 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-shot_angle-shot_distance, family=binomial, data=kobe, subset=train_id)
 #logreg3 = glm(shot_made_flag~.-combined_shot_type-shot_zone_area-shot_zone_basic-shot_angle-shot_distance+feet_x*feet_y, family=binomial, data=kobe, subset=train_id)
 probs3 = predict(logreg3, test_x, type="response")
@@ -170,7 +172,7 @@ However, as we already said this value can be significantly influenced by other 
 To do that we build a new model which does not contain the action_type attribute, but instead takes in the *combined_shot_type*, which is just a generalization of the former one. We then look at the p-values of other attributes in the model. As a consequence of the lack of information, the validation accuracy drops suddenly to 60.8%, which points out the importance of the action_type attribute with respect to most of the other ones, which had little or no impact at test time, as we have seen in the last sections.\
 At the same time, however, we also see that the degree of rejection of the null hypothesis for the other predictors changes significantly: for example the p-value for *season* is reduced by a factor $10^4$, while for *shot_distance* it increases by $10^3$.
 
-```{r}
+```{r, message=FALSE}
 # model variance
 logreg4 = glm(shot_made_flag~.-action_type-shot_zone_area-shot_zone_basic-feet_x-feet_y , family=binomial, data=kobe, subset=train_id)
 pvalues1 = coef(summary(logreg1))[,4][27:31]
@@ -179,10 +181,6 @@ tab = matrix(c(pvalues1, pvalues2), ncol=2, byrow=TRUE)
 colnames(tab) = c("logreg1", "logreg4")
 rownames(tab) = c("period", "playoffs", "season", "shot_distance", "shot_type")
 tab
-#probs4 = predict(logreg4, test_x, type="response")
-#preds4 = ifelse(probs4>.45, 1, 0)
-#sum(preds4==test_y)/length(test_y)
-
 ```
 
 ### 3. Decision tree
@@ -199,7 +197,7 @@ The tree can be then grown until there are no more attributes or we can set a st
 The standard R implementation of the algorithm forces us to discard in advance those factors (i.e. categorical variables) that have more than 32 levels in the domain, which in our case are opponent and action_type.\
 As we run the algorithm we notice that only one attributes is considered, namely combined_shot_type. Nevertheless, the validation accuracy is roughly 61%
 
-```{r}
+```{r, message=FALSE}
 library(tree)
 shot_made_bool = ifelse(shot_made_flag==1, "Yes", "No")
 kobe_frame = data.frame(kobe, shot_made_bool)
@@ -219,7 +217,7 @@ In this way we build a certain number of trees that can be possibly very differe
 The numbers of trees is a hyperparameter of the technique, that can be tuned using the typical validation techniques (validation set or cross-validation); typical values are in the order of several hundreds. Clearly, using so many models in parallel comes at a cost both when it comes to train the model and to produce a prediction.\
 We train different models with a number of trees between 200 and 800, however the validation accuracy does not exceed 58%, which is worse than the single decision tree. This may be due to implementation details of the two algorithms, but for us it means primarily that the model using the decision tree does not suffer from excessive variance and overfitting.
 
-```{r}
+```{r, message=FALSE}
 library(randomForest)
 acc = rep(NA, 7)
 ntrees = seq(200, 800, 100)
@@ -237,7 +235,7 @@ plot(ntrees, acc, xlab="n° trees", ylab="accuracy", ylim=c(.5,.6), pch=20, col=
 Random forest is a generalization of the bagging technique, which aims to further reduce the variance of models based on decision trees. In this case, besides sampling many datasets and building a different tree on each dataset, the algorithm considers only a limited number of attributes to, which are chosen randomly at each split step. This helps to reduce the correlation between trees, which tend to consider some major attributes at the beginning and hence deliver similar results.\
 The number of variables taken into account is a hyperparameter, which is normally $\sqrt{p}$ in case of $p$ predictors. In the following plot are displayed the validation accuracies for models with different values of $p$. As you may have guessed, a model which considers all 13 predictors coincides with the bagging model illustrated in the last section.\
 As we can see, the highest accuracy is reached with as little as two predictors and is comparable with the one of the simple decision tree model. This may also explain why the bagging model resulted in a poorer performance.
-```{r}
+```{r, message=FALSE}
 set.seed(0)
 acc = rep(NA, 9)
 attr = 2:10
@@ -262,8 +260,7 @@ In case the hyperplane in which the training samples are placed is not linearly 
 Another alternative for solving non linear problems with Svm is to use the so-called *kernel trick*. The idea behind that is to project the samples into a higher-dimensional space where the problem is linearly separable. In the equation above we replace thus $x$ with $\phi(x)$. The function $\phi$ is not given explicitly, instead we usually consider an alternative function *k* that fulfills the equation $k(x,y) =<\phi(x),\phi(y)>$.\
 We are going to consider here four soft-margin Svm models which use all predictors in the dataset as explained in sec. 1. Each model employs a different kernel function, the four possibilities are a linear, a polynomial, a radial basis and a sigmoid kernel. In the folloowing plot we show how these models perform: we can see that, apart from the polynomial kernel, they reach similar accuracies as the logistic regression models considered in sec. 2.
 
-<!-- Try als polynomial and sigmoid-->
-```{r}
+```{r, message=FALSE}
 library(e1071)
 dat = kobe_frame[train_id,]
 acc = rep(NA, 4)
@@ -286,7 +283,7 @@ The most important issue in our case is that it is particularly difficult to def
 Keeping this considerations in mind we build a Knn classifier that only considers 6 of the original 13 attributes, i.e. season, feet_x, feet_y, shot_distance, shot_angle and shot_type. Knn models must be configured with a hyperparameter *k* that indicates the number of samples to be consider. In fact, the prediction is produced as a majority vote among the *k* nearest neighbors - hence the name - that can be possibly weighted to account for the distance to each neighbor.\
 The following plot shows the validation accuracy of multiple models with values of *k* ranging between 3 and 99. At the beginning the performance improves along with the number of neighbors considered, then it reaches a plateau at roughly 60% accuracy, after which there is little or no improvement. For a good bias-variance tradeoff it would be therefore dvisable to choose a value of *k* near to the rightmost knee of the curve, that in this case is k=43.
 
-```{r}
+```{r, message=FALSE}
 library(class)
 set.seed(1)
 shot_type_num = ifelse(shot_type=="3PT Field Goal", 1, 0)
@@ -308,16 +305,26 @@ plot(neighbors, acc, xlab="k", ylab="accuracy", ylim=c(.5,.65), pch=20, col="blu
 ##### 6.1 Principal Component Analysis
 The most popular technique for dimensionality reduction is probably Principal Components Analysis (Pca). Intuitively, this method wants to perform a change of basis in the predictor hyperplane, choosing each basis vector according to its capability to explain the variance in the data.\
 This is most commonly done by means of an iterative algorithm that chooses at each step the vector that leads to the most variance when the original data are projected onto it. For this reason the vectors are taken into the basis in descending order of importance, since the last ones only cover the variance that has been left unexplained by the first ones. The values in the change of basis matrix give then a hint about which of the original attributes plays a significant role in characterizing the data.\
-Unfortunately, since the basis vectors are linear dependencies of the original attributes it is important that the latters take on numerical value: therefore, just like in the case of Knn is not possible to use dummy variables to encode the categorical attributes. Our analysis will thus consist in performing a Pca analysis on the continuous attributs we have used also for Knn (i.e. season, feet_x, feet_y, shot_distance, shot_angle and shot_type) and training a logistic regression model which the first two principal components (i.e. basis vectors) along with the categorical attributes.
+Unfortunately, since the basis vectors are linear dependencies of the original attributes it is important that the latters take on numerical value: therefore, just like in the case of Knn is not possible to use dummy variables to encode the categorical attributes. Our analysis will thus consist in performing a Pca analysis on the continuous attributes we have used also for Knn (i.e. season, feet_x, feet_y, shot_distance, shot_angle and shot_type) and training a logistic regression model which the first three principal components (i.e. basis vectors) along with the categorical attributes used in sec. 2.1.\
+As we can see, the attributes with the biggest weight in the first principal component are shot_distance and feet_y
 
-```{r}
+```{r, message=FALSE}
 library("factoextra")
 kobe.cont = kobe[,which(names(kobe) %in% c("season", "feet_x", "feet_y", "shot_distance", "shot_angle"))]
 kobe.cont = cbind(kobe.cont, shot_type_num)
 pca = prcomp(kobe.cont[train_id,], scale=TRUE)
-fviz_eig(pca)
 res.var <- get_pca_var(pca)
 res.var$coord
+```
+
+The first vector is also able to explain more than 50% of the overall variance, as it results from the following plot.
+```{r, echo=FALSE}
+fviz_eig(pca)
+```
+
+As we said, we now want to train a logistic regression model that makes use only of the first three Pcca vectors, which according to the plot above explain over 80% of the variance. In this way we are able to include informations about all our attributes (including e.g. the two different coordinate systems) without increasing the variance of the model.\
+Indeed, on the basis of the validation accuracy we notice that this models performs as good as the one from sec. 2.1 using a 50% threshold.
+```{r, message=FALSE}
 pca.cont = as.data.frame(predict(pca, newdata=kobe.cont)[,1:3])
 pca.kobe = cbind(pca.cont, action_type, period, playoffs, opponent)
 PC1 = pca.kobe$PC1
@@ -330,18 +337,16 @@ sum(preds==test_y)/length(test_y)
 ```
 
 #### 6.2 Factor Analysis of Mixed Data
-In this section we have a brief look at another technique, called Factor Analysis of Mixed Data (FAMD). Its goal is to offer a single dimensionality framework for both continuous and categorical attributes: this is achieved performing a Pca anaysis on the first ones (just like we have seen in the last section) and a Multiple Correspondence Analysis on the latter ones. In this case it is not possible to perform a change of basis and to gain a single attribute that summarizes the variance, as it happened in Pca. Therefore our analysis does not aim to build another model - possibly with less attributes and a better performance as in the case of Pca - but only to have an idea of which attributes explain the variance in the data, without limiting our scope to continuous attributes.
+In this section we have a brief look at another technique, called Factor Analysis of Mixed Data (FAMD). Its goal is to offer a single dimensionality framework for both continuous and categorical attributes: this is achieved performing a Pca anaysis on the first ones (just like we have seen in the last section) and a Multiple Correspondence Analysis on the latter ones. In this case it is not possible to perform a change of basis and to gain a single attribute that summarizes the variance, as it happened in Pca. Therefore our analysis does not aim to build another model - possibly with less attributes and a better performance as in the case of Pca - but only to have an idea of which attributes explain the variance in the data, without limiting our scope to continuous attributes.\
+From the plot we can see that the first dimension is controlled in a high degree by shot_distance, shot_zone_basic and action_type (together with its generalization combined_shot_type). This is coherent both with the result of Pca (which gave a high weight to shot_distance in the first vector) and with our experience, since we have seen in sec. 2 that action_type alone is capable of increasing the model accuracy by 8%. On the other hand, other attributes such as the opponent or the shot side play little or no role in characterizing a shot.
 
-```{r}
+```{r, message=FALSE}
 library("FactoMineR")
 famd = FAMD(kobe[,-which(names(kobe)=="shot_made_flag")], graph = FALSE)
-#get_eigenvalue(famd)
 var = get_famd_var(famd)
-#var$contrib
 fviz_famd_var(famd, repel = TRUE)
-fviz_screeplot(famd)
 ```
 
 ### 7. Conclusion
 In this last section we compare the models introduced sofar. Among all of them, the logistic regression and the support vector machine algorithms have provided the best results in term of validation accuracy, scoring about 68% correct predictions. The logistic regression setting has also proved to be robust with respect to changes in the predictors, such as the coordinate system. This comes at the cost of a considerable model complexity, which makes them interpretable only by means of the mathematical formulas they are based on.\
-On the other hand, simple models such as decision tree and Knn have shown results that go way beyond a simple null model, which makes only majority class considerations. This occurs despite inherent limitations in the models, e.g. the use of greedy choices in the construction of a decision tree or the difficulty to include categorical attributes in a Knn model.
+On the other hand, simple models such as decision tree and Knn have shown results that go way beyond a simple null model, which makes only majority class considerations. This occurs despite inherent limitations in the models, e.g. the use of greedy choices in the construction of a decision tree or the difficulty to include categorical attributes in a Knn model. 
