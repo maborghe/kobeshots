@@ -244,41 +244,37 @@ plot(attr, acc, xlab="mtry", ylab="accuracy", ylim=c(.5,.65), pch=20, col="blue"
 ```
 
 
-### 4. Svm
-In this section we will consider another popular classification technique, that is Support Vector Machines. The goal of this technique is to find a vector *w*, called *support vectors*, that satisfies the equation 
+### 4. Support Vector Machines
+In this section we will consider another popular classification technique, that is Support Vector Machines (Svm). The goal of this technique is to find a vector *w*, called *support vectors*, that satisfies the equation 
 
 <center>$y(w*x-b)>=1$</center>
 
 for every training sample *x*. In order to do so an iterative algorithm is applied, and *w* is computed as a weighted sum of all the training samples. In case the hyperplane in which the training samples are placed is not linearly separable (i.e. there is no vector *w* which satisfy the equation) it is possible to introduce a so-called slack variable in order to relax the constraint.\
 In order to account for categorical attributes it is possible to use the same approach seen in the logistic regression, i.e. a set of dummy variables that are able to encode all the values of the attribute domain.
 
+<!-- Try als polynomial and sigmoid-->
 ```{r}
 library(e1071)
 dat = kobe_frame[train_id,]
-svmlin = svm(shot_made_bool~., data=dat, kernel="linear", cost=10, scale=TRUE)
-preds = predict(svmlin, kobe_frame[-train_id,])
-preds = ifelse(preds=="No", 0, 1)
-sum(preds==test_y)/length(test_y)
+acc = rep(NA, 4)
+ker = c("linear", "polynomial", "radial", "sigmoid")
+for (i in 1:4) {
+  svmlin = svm(shot_made_bool~., data=dat, kernel=ker[i], scale=TRUE)
+  preds = predict(svmlin, kobe_frame[-train_id,])
+  preds = ifelse(preds=="No", 0, 1)
+  acc[i] = sum(preds==test_y)/length(test_y)
+}
+acc
 ```
 
-```{r}
-library(e1071)
-dat = kobe_frame[train_id,]
-svmrad = svm(shot_made_bool~., data=dat, kernel="radial", gamma=1, cost=10, scale=FALSE)
-preds = predict(svmrad, kobe_frame[-train_id,])
-preds = ifelse(preds=="No", 0, 1)
-sum(preds==test_y)/length(test_y)
-```
-
-### 6. Knn
-<!-- We use only continuous (season, feet_x, feet_y, distance, angle) and ordinal () variables -->
-<!-- Use different distances -->
-The last classification technique we present here is K-nearest Neighbors, a.k.a. KNN. The idea behind this algorithm is to assign samples which are "near" to each other to the same class. Much like decision trees, despite its intuitive nature this method performs surprisingly well in many real cases and is appreciated for its high degree of interpretability, which makes its results easier to understand than e.g. logistic regression or support vector machines.\
+### 6. K-nearest Neighbors
+The last classification technique we present here is K-nearest Neighbors, a.k.a. Knn. The idea behind this algorithm is to assign samples which are "near" to each other to the same class. Much like decision trees, despite its intuitive nature this method performs surprisingly well in many real cases and is appreciated for its high degree of interpretability, which makes its results easier to understand than e.g. logistic regression or support vector machines.\
 Given that, the main disadvantage of Knn is that it is computationally slow at testing time: in fact, the dataset has to be traversed each time in order to find the "nearest" samples and to produce a prediction. This also that the storage requirements of this technique are quite disfavorable, as well, since it requires to store the whole dataset and to keep it available at test time. This characteristics are radically different from the ones shown by Svm, which only requires to store the support vector and is able to produce a prediction just by multiplying that vector with the input.\
 The central point when dealing with a Knn classifier is how to define the distance between to samples. The typical approach is here to use some kind of Minkowski distance (most commonly the Euclidean or the Manhattan distance) in the predictor hyperspace. However there are at least two aspects that must be considered. First of all, the attributes normally have big differences in their domain range. Some attributes like loc_x span an interval of several hundreds, while others are contained within just two or three numbers. In order to prevent a subset of predictors from determining the outcome alone, the attributes have to be normalized according to their mean and their standard distance.\
 Secondly, as the number of dimensions in a hyperspace increases the difference between the neighrest and the furthest sample reduces. In a high-dimensional space distance metrics lose any significance and the performance of the model is seriously harmed.\
 The most important issue in our case is that it is particularly difficult to define the distance in case of categorical attributes. If the variable is ordinal, it is still possible to assign an incremental value to each domain level. Dummy variables here are pointless, since they increase drastically the number of dimensions without providing a real advantage.\
-Keeping this considerations in mind we build a Knn classifier that only considers 6 of the original 13 attributes, i.e. season, feet_x, feet_y, shot_distance, shot_angle and shot_type. Knn models must be configured with a hyperparameter *k* that indicates the number of samples to be consider. In fact, the prediction is produced as a majority vote among the *k* nearest neighbors - hence the name - that can be possibly weighted to account for the distance to each neighbor.
+Keeping this considerations in mind we build a Knn classifier that only considers 6 of the original 13 attributes, i.e. season, feet_x, feet_y, shot_distance, shot_angle and shot_type. Knn models must be configured with a hyperparameter *k* that indicates the number of samples to be consider. In fact, the prediction is produced as a majority vote among the *k* nearest neighbors - hence the name - that can be possibly weighted to account for the distance to each neighbor.\
+The following plot shows the validation accuracy of multiple models with values of *k* ranging between 3 and 99. At the beginning the performance improves along with the number of neighbors considered, then it reaches a plateau at roughly 60% accuracy, after which there is little or no improvement. For a good bias-variance tradeoff it would be therefore dvisable to choose a value of *k* near to the rightmost knee of the curve, that in this case is k=43.
 
 ```{r}
 library(class)
@@ -287,30 +283,39 @@ shot_type_num = ifelse(shot_type=="3PT Field Goal", 1, 0)
 train.X = cbind(season, feet_x, feet_y, shot_distance, shot_angle, shot_type_num)[train_id,]
 train.Y = shot_made_flag[train_id]
 test.X = cbind(season, feet_x, feet_y, shot_distance, shot_angle, shot_type_num)[-train_id,]
-preds = knn(train.X, test.X, train.Y, k=5)
-table(preds, test_y)
-acc = sum(preds==test_y)/length(test_y)
+neighbors = seq(3,99,2)
+acc = rep(NA, length(neighbors))
+for (i in seq(1, length(neighbors))) {
+  preds = knn(train.X, test.X, train.Y, k=neighbors[i])
+  table(preds, test_y)
+  acc[i] = sum(preds==test_y)/length(test_y)
+}
+plot(neighbors, acc, xlab="k", ylab="accuracy", ylim=c(.5,.65), pch=20, col="blue")
 ```
 
 ### 7. Dimensionality reduction
 
-#### 7.1 Factor Analysis of Mixed Data (FAMD)
+##### 7.1 Principal Component Analysis
+The most popular technique for dimensionality reduction is probably Principal Components Analysis (Pca). Intuitively, this method wants to perform a change of basis in the predictor hyperplane, choosing each basis vector according to its capability to explain the variance in the data.\
+This is most commonly done by means of an iterative algorithm that chooses at each step the vector that leads to the most variance when the original data are projected onto it. For this reason the vectors are taken into the basis in descending order of importance, since the last ones only cover the variance that has been left unexplained by the first ones. The values in the change of basis matrix give then a hint about which of the original attributes plays a significant role in characterizing the data.\
+Unfortunately, since the basis vectors are linear dependencies of the original attributes it is important that the latters take on numerical value: therefore, just like in the case of Knn is not possible to use dummy variables to encode the categorical attributes. Our analysis will thus consist in performing a Pca analysis on the continuous attributs we have used also for Knn (i.e. season, feet_x, feet_y, shot_distance, shot_angle and shot_type) and training a logistic regression model which the first two principal components (i.e. basis vectors) along with the categorical attributes.
+
+```{r}
+pr.out = prcomp(kobe, scale=TRUE)
+```
+
+#### 7.2 Factor Analysis of Mixed Data
+In this section we have a brief look at another dimensionality reduction technique, called Factor Analysis of Mixed Data (FAMD). Its goal is to 
+
 ```{r}
 library("FactoMineR")
 library("factoextra")
-famd = FAMD(kobe[,-which(names(
-  kobe)=="shot_made_flag")], graph = FALSE)
+famd = FAMD(kobe[,-which(names(kobe)=="shot_made_flag")], graph = FALSE)
 get_eigenvalue(famd)
 fviz_screeplot(famd)
 var = get_famd_var(famd)
 var$contrib
 fviz_famd_var(famd, repel = TRUE)
-```
-
-
-##### 7.2 Pca
-```{r}
-pr.out = prcomp(kobe, scale=TRUE)
 ```
 
 
