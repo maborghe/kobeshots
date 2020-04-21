@@ -264,7 +264,7 @@ for (i in 1:4) {
   preds = ifelse(preds=="No", 0, 1)
   acc[i] = sum(preds==test_y)/length(test_y)
 }
-acc
+barplot(acc, xlab="kernel", ylab="accuracy", names.arg=ker, col="darkred", ylim=c(0,1), space=1) 
 ```
 
 ### 6. K-nearest Neighbors
@@ -311,11 +311,11 @@ In this section we have a brief look at another technique, called Factor Analysi
 library("FactoMineR")
 library("factoextra")
 famd = FAMD(kobe[,-which(names(kobe)=="shot_made_flag")], graph = FALSE)
-get_eigenvalue(famd)
-fviz_screeplot(famd)
+#get_eigenvalue(famd)
 var = get_famd_var(famd)
-var$contrib
+#var$contrib
 fviz_famd_var(famd, repel = TRUE)
+fviz_screeplot(famd)
 ```
 
 
